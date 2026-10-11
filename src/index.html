@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Japanese Grammar Study</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <header id="top-bar">
+    <div class="brand"><a href="#/">日本語文法</a></div>
+    <div id="config-box" class="config-box">
+      <div class="config-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="cfg-furigana">
+          <span>振仮名 (Furigana)</span>
+        </label>
+        <select id="cfg-provider" aria-label="LLM Provider">
+          <option value="OpenAI">OpenAI</option>
+          <option value="Anthropic">Anthropic</option>
+          <option value="Gemini">Gemini</option>
+          <option value="Custom">Custom (OpenAI-Compatible)</option>
+        </select>
+      </div>
+
+      <div class="config-row">
+        <input type="text" id="cfg-endpoint" placeholder="Endpoint: https://api.example.com" class="hidden">
+        <input type="password" id="cfg-key" placeholder="API Key (in-memory only)" autocomplete="off">
+      </div>
+
+      <div class="config-row">
+        <select id="cfg-model" aria-label="Model Selection">
+          <option value="">Select or fetch model...</option>
+        </select>
+        <button type="button" id="cfg-fetch-models-btn" class="btn btn-secondary">Fetch Models</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="app" class="container"></main>
+
+  <div id="toast" class="toast hidden" role="alert"></div>
+
+  <script src="prompts.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
