@@ -148,33 +148,33 @@ async function readSSE(response, onLine) {
 }
 
 /* ==========================================================================
-   Prompt Formatting (Skeleton Implementation)
+   Prompt Formatting
    ========================================================================== */
 function formatExamplePrompt(item, lesson) {
   const tpl = window.SYSTEM_PROMPTS?.example_system_prompt || '';
+  // {lesson_name}, {lesson}, {japanese}, {english}
   return tpl
-    .replaceAll('{sentence}', item.Japanese || '')
-    .replaceAll('{explanation}', item.Explanation || '')
-    .replaceAll('{lesson_title}', lesson.Lesson || '');
+    .replaceAll('{lesson_name}', lesson.Lesson || '')
+    .replaceAll('{lesson}', item.Explanation || '')
+    .replaceAll('{japanese}', item.Japanese || '')
+    .replaceAll('{english}', item.Translation || '');
 }
 
 function formatPracticeTranslationPrompt(item, lesson) {
   const tpl = window.SYSTEM_PROMPTS?.practice_translation_system_prompt || '';
+  // {english}, {answers}
   return tpl
-    .replaceAll('{sentence}', item.English || '')
-    .replaceAll('{answers}', (item['Reference Answers'] || []).join('\n'))
-    .replaceAll('{explanation}', item.Explanation || '')
-    .replaceAll('{lesson_title}', lesson.Lesson || '');
+    .replaceAll('{english}', item.English || '')
+    .replaceAll('{answers}', (item['Reference Answers'] || []).join('\n'));
 }
 
 function formatPracticeRespondPrompt(item, lesson) {
   const tpl = window.SYSTEM_PROMPTS?.practice_respond_system_prompt || '';
+  // {statement}, {context}, {answers}
   return tpl
-    .replaceAll('{sentence}', item['Respond-able statement'] || '')
+    .replaceAll('{statement}', item['Respond-able statement'] || '')
     .replaceAll('{context}', item.Context || '')
-    .replaceAll('{answers}', (item['Reference Answers'] || []).join('\n'))
-    .replaceAll('{explanation}', item.Explanation || '')
-    .replaceAll('{lesson_title}', lesson.Lesson || '');
+    .replaceAll('{answers}', (item['Reference Answers'] || []).join('\n'));
 }
 
 function makeSystemPrompt(sectionType, item, lesson) {
@@ -194,6 +194,7 @@ function parseThinkingBlocks(rawText) {
   return { thinking, content };
 }
 
+// toast is the pop-up message that fades away after a short time. Just like your toast melts back into the toaster if you're not quick enough
 function showToast(message) {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -210,7 +211,7 @@ async function handleSubmission(itemKey, systemPrompt) {
   if (!isLLMSet()) {
     const standalone = `${systemPrompt}\n\nStudent Submission / Question:\n${userText}`;
     await navigator.clipboard.writeText(standalone);
-    showToast('LLM not configured. Formatted prompt copied to clipboard! Paste into chatbot!');
+    showToast('Formatted prompt copied to clipboard! Paste into chatbot to grade it!');
     return;
   }
 
@@ -498,6 +499,7 @@ function bindConfigUI() {
     state.apiKey = keyEl.value;
   });
 
+  // fetch models automatically after 1 second of inputting API key
   keyEl.addEventListener('blur', () => {
     if (state.apiKey && modelEl.options.length <= 1) fetchModels();
   });

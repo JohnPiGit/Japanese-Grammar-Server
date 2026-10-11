@@ -7,7 +7,10 @@ import json
 import re
 import shutil
 import tomllib
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 import pykakasi
 
@@ -16,84 +19,163 @@ DATA_DIR = ROOT_DIR / "data"
 SRC_DIR = ROOT_DIR / "src"
 DIST_DIR = ROOT_DIR / "dist"
 
-# Initialize Kakasi
-kks = pykakasi.kakasi()
 
-# Regex to match kanji characters
-KANJI_REGEX = re.compile(r"[\u4e00-\u9faf々]")
+KANJI_PATTERN: Final[re.Pattern[str]] = re.compile(r"[\u4e00-\u9faf々]")
 
-# Matches Markdown constructs that should NOT have furigana added:
-# - Fenced code blocks (```...```)
-# - Inline code (`...`)
-# - Markdown links [text](url) -> extracts URL so it isn't touched
-# - Existing HTML tags (<...>)
-MARKDOWN_PROTECT_REGEX = re.compile(
-    r"(```[\s\S]*?```|`[^`]+`|<[^>]+>|\[[^\]]+\]\([^)]+\))"
+# Lexer: Tokenize markdown elements with named capture groups
+MARKDOWN_LEXER: Final[re.Pattern[str]] = re.compile(
+    r"(?P<CODE_BLOCK>```[\s\S]*?```)"
+    r"|(?P<INLINE_CODE>`[^`\n]+`)"
+    r"|(?P<LINK>\[(?P<link_text>[^\]]+)\]\((?P<link_url>[^)]+)\))"
+    r"|(?P<HTML_TAG><[^>]+>)"
 )
 
-
-def _common_prefix_len(s1: str, s2: str) -> int:
-    """Returns the number of identical leading characters in two strings."""
-    for i, (c1, c2) in enumerate(zip(s1, s2)):
-        if c1 != c2:
-            return i
-    return min(len(s1), len(s2))
+# Shared Kakasi converter instance
+kakasi_converter: Final[pykakasi.kakasi] = pykakasi.kakasi()
 
 
-def _split_okurigana(orig: str, hira: str) -> tuple[str, str, str, str]:
-    """Splits matching leading/trailing kana away from the kanji/reading core."""
-    # 1. Match leading kana (e.g., お in お茶)
-    pre_len = _common_prefix_len(orig, hira)
-    pre = orig[:pre_len]
-    orig_rest = orig[pre_len:]
-    hira_rest = hira[pre_len:]
+# ---------------------------------------------------------------------------
+# Data Models
+# ---------------------------------------------------------------------------
 
-    # 2. Match trailing kana on the remaining text (e.g., べる in 食べる)
-    suf_len = _common_prefix_len(orig_rest[::-1], hira_rest[::-1])
 
-    kanji = orig_rest[: len(orig_rest) - suf_len]
-    post = orig_rest[len(orig_rest) - suf_len :]
-    reading = hira_rest[: len(hira_rest) - suf_len]
+@dataclass(frozen=True, slots=True)
+class RubySegment:
+    """Represents a Japanese word split into base kanji, reading, and affixes."""
 
-    return pre, kanji, reading, post
+    prefix: str
+    base: str
+    reading: str
+    suffix: str
+
+    def to_html(self) -> str:
+        """Renders the segment into semantic HTML <ruby> markup."""
+        return (
+            f"{self.prefix}<ruby>{self.base}<rt>{self.reading}</rt></ruby>{self.suffix}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Okurigana Alignment Helpers
+# ---------------------------------------------------------------------------
+
+
+def _common_prefix_length(first: str, second: str) -> int:
+    """Calculates the number of identical leading characters between two strings."""
+    for index, (char_a, char_b) in enumerate(zip(first, second, strict=False)):
+        if char_a != char_b:
+            return index
+    return min(len(first), len(second))
+
+
+def _split_okurigana(orig: str, hira: str) -> RubySegment:
+    """Extracts identical leading and trailing kana, isolating kanji for ruby generation."""
+    # 1. Match leading kana (e.g., 'お' in 'お茶')
+    pre_len = _common_prefix_length(orig, hira)
+    prefix = orig[:pre_len]
+    orig_body = orig[pre_len:]
+    hira_body = hira[pre_len:]
+
+    # 2. Match trailing kana (e.g., 'べる' in '食べる')
+    suf_len = _common_prefix_length(orig_body[::-1], hira_body[::-1])
+
+    base = orig_body[: len(orig_body) - suf_len]
+    suffix = orig_body[len(orig_body) - suf_len :]
+    reading = hira_body[: len(hira_body) - suf_len]
+
+    return RubySegment(prefix=prefix, base=base, reading=reading, suffix=suffix)
 
 
 def _token_to_ruby(orig: str, hira: str) -> str:
-    """Formats a single token into HTML ruby tags, stripping matching okurigana."""
-    if not KANJI_REGEX.search(orig) or orig == hira:
+    """Converts a token into ruby HTML if it contains kanji."""
+    if not KANJI_PATTERN.search(orig) or orig == hira:
         return orig
 
-    pre, kanji, reading, post = _split_okurigana(orig, hira)
-    return f"{pre}<ruby>{kanji}<rt>{reading}</rt></ruby>{post}"
+    return _split_okurigana(orig, hira).to_html()
+
+
+# ---------------------------------------------------------------------------
+# Plain Text Furigana Generator
+# ---------------------------------------------------------------------------
 
 
 def add_furigana_plain(text: str) -> str:
-    """Converts a segment of plain Japanese text to include ruby tags."""
-    tokens = kks.convert(text)
+    """Tokenizes raw Japanese text and injects furigana."""
+    tokens = kakasi_converter.convert(text)
     return "".join(_token_to_ruby(t["orig"], t["hira"]) for t in tokens)
 
 
+# ---------------------------------------------------------------------------
+# Markdown Token Handlers (Strategy Pattern)
+# ---------------------------------------------------------------------------
+
+
+def _handle_code_block(match: re.Match[str]) -> str:
+    """Leaves multi-line code blocks untouched."""
+    return match.group(0)
+
+
+def _handle_html_tag(match: re.Match[str]) -> str:
+    """Leaves pre-existing HTML markup untouched."""
+    return match.group(0)
+
+
+def _handle_link(match: re.Match[str]) -> str:
+    """Applies furigana strictly to the anchor text, preserving target URL."""
+    anchor = match.group("link_text")
+    url = match.group("link_url")
+    return f"[{add_furigana_plain(anchor)}]({url})"
+
+
+def _handle_inline_code(match: re.Match[str]) -> str:
+    """Converts Japanese inline code to <code> tags so the Markdown parser passes them safely."""
+    raw_content = match.group(0)[1:-1]  # Strip enclosing backticks
+
+    if KANJI_PATTERN.search(raw_content):
+        return f"<code>{add_furigana_plain(raw_content)}</code>"
+
+    # Standard code (e.g., `git commit`) remains backtick-fenced
+    return match.group(0)
+
+
+TOKEN_HANDLERS: Final[dict[str, Callable[[re.Match[str]], str]]] = {
+    "CODE_BLOCK": _handle_code_block,
+    "INLINE_CODE": _handle_inline_code,
+    "LINK": _handle_link,
+    "HTML_TAG": _handle_html_tag,
+}
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
 def add_furigana(text: str) -> str:
-    """Adds furigana while safely preserving Markdown code, links, and HTML."""
-    parts = MARKDOWN_PROTECT_REGEX.split(text)
-    result = []
+    """Scans and annotates Japanese text with furigana while respecting Markdown structure."""
+    output_chunks: list[str] = []
+    cursor = 0
 
-    for part in parts:
-        if not part:
-            continue
-        # If this part matched a protected Markdown pattern:
-        if MARKDOWN_PROTECT_REGEX.fullmatch(part):
-            # If it's a markdown link [anchor](url), convert furigana inside the anchor only
-            link_match = re.match(r"\[([^\]]+)\]\(([^)]+)\)", part)
-            if link_match:
-                anchor, url = link_match.groups()
-                result.append(f"[{add_furigana_plain(anchor)}]({url})")
-            else:
-                result.append(part)
+    for match in MARKDOWN_LEXER.finditer(text):
+        # 1. Process plain text before this match
+        if match.start() > cursor:
+            plain_slice = text[cursor : match.start()]
+            output_chunks.append(add_furigana_plain(plain_slice))
+
+        # 2. Dispatch the token to its specialized handler
+        token_type = match.lastgroup
+        if token_type and token_type in TOKEN_HANDLERS:
+            output_chunks.append(TOKEN_HANDLERS[token_type](match))
         else:
-            result.append(add_furigana_plain(part))
+            output_chunks.append(match.group(0))
 
-    return "".join(result)
+        cursor = match.end()
+
+    # 3. Process any remaining trailing plain text
+    if cursor < len(text):
+        output_chunks.append(add_furigana_plain(text[cursor:]))
+
+    return "".join(output_chunks)
 
 
 def transform_tree(node: object, transform_fn) -> object:
