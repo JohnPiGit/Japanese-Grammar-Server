@@ -207,7 +207,7 @@ async function handleSubmission(itemKey) {
   const inputEl = document.getElementById(`input-${itemKey}`);
   const userText = inputEl.value.trim();
   if (!userText) return;
-  
+
   const { sectionType, item } = getSectionTypeItem(itemKey);
   const lesson = getLesson(itemKey);
   const systemPrompt = makeSystemPrompt(sectionType, item, lesson);
