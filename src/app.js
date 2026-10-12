@@ -269,14 +269,14 @@ async function executeStreamingChat(itemKey, systemPrompt) {
 function updateStreamingUIWithAutoScroll(historyEl, itemKey, text) {
   const threshold = 50; // Distance in pixels from bottom considered "at the bottom"
   const prevHeight = historyEl.scrollHeight;
-    const isAtBottom = prevHeight - historyEl.scrollTop - historyEl.clientHeight <= threshold;
-  
-    updateStreamingUI(itemKey, text);
-  
-    // Only scroll if the box expanded AND you were already at the bottom
-    if (historyEl.scrollHeight !== prevHeight && isAtBottom) {
-      historyEl.scrollTop = historyEl.scrollHeight;
-    }
+  const isAtBottom = prevHeight - historyEl.scrollTop - historyEl.clientHeight <= threshold;
+
+  updateStreamingUI(itemKey, text);
+
+  // Only scroll if the box expanded AND you were already at the bottom
+  if (historyEl.scrollHeight !== prevHeight && isAtBottom) {
+    historyEl.scrollTop = historyEl.scrollHeight;
+  }
 }
 
 function updateStreamingUI(itemKey, text) {
@@ -398,10 +398,15 @@ function renderLessonView(lessonKey) {
       ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">${item['Respond-able statement']}</div>
-          <details id="details-${getKey('resp', idx)}">
-            <summary>Context &amp; Practice</summary>
+          <details id="context-details-${getKey('resp', idx)}">
+            <summary>Context</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Context:</strong> ${item.Context}</div>
+            </div>
+          </details>
+          <details id="details-${getKey('resp', idx)}">
+            <summary>Answers</summary>
+            <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
@@ -588,6 +593,12 @@ function renderReferenceAnswers(answers) {
 function openDetails(itemKey) {
   const detailsEl = document.getElementById(`details-${itemKey}`);
   detailsEl.open = true;
+
+  // catch-all that tries to open the context details/dropdown (will do nothing if there is no associated dropdown)
+  const contextDetailsEl = document.getElementById(`context-details-${itemKey}`);
+  if (contextDetailsEl) {
+    contextDetailsEl.open = true;
+  }
 }
 
 // Helper func to allow for copying when testing on localhost

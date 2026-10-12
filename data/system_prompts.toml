@@ -45,7 +45,7 @@ practice_respond_system_prompt = """You are a Japanese teacher teaching an Engli
 The student is trying to respond to the following statement in Japanese:
 "{statement}"
 
-The following is the context surrounding the statement:
+The following is optional context surrounding the statement, however, the student doesn't have to use this and can respond without context/making their own up. If the students response doesn't seem to fit this context, grade it without this context:
 "{context}"
 
 The following are some reference answers/responses (but don't take them at face value, their correctness has not been assessed):
