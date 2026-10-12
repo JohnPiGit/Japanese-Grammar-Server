@@ -33,7 +33,7 @@ function saveConfig() {
 function isLLMSet() {
   const { provider, customEndpoint, selectedModel } = state.config;
   const hasEndpoint = provider !== 'Custom' || Boolean(customEndpoint.trim());
-  return Boolean(state.apiKey.trim() && selectedModel && hasEndpoint);
+  return Boolean(state.apiKey !== '' && selectedModel && hasEndpoint);
 }
 
 /* ==========================================================================
@@ -239,13 +239,16 @@ async function executeStreamingChat(itemKey, systemPrompt) {
 
   let fullResponse = '';
   try {
+    // start streaming response. First, scroll to the bottom
+    const historyEl = document.getElementById(`history-${itemKey}`);
+    historyEl.scrollTop = historyEl.scrollHeight;
     await adapter.streamChat(
       state.config,
       state.apiKey,
       messages,
       chunk => {
         fullResponse += chunk;
-        updateStreamingUI(itemKey, fullResponse);
+        updateStreamingUIWithAutoScroll(historyEl, itemKey, fullResponse);
       },
       controller.signal
     );
@@ -259,6 +262,19 @@ async function executeStreamingChat(itemKey, systemPrompt) {
     toggleSubmissionState(itemKey, false);
     renderHistory(itemKey);
   }
+}
+
+function updateStreamingUIWithAutoScroll(historyEl, itemKey, text) {
+  const threshold = 50; // Distance in pixels from bottom considered "at the bottom"
+  const prevHeight = historyEl.scrollHeight;
+    const isAtBottom = prevHeight - historyEl.scrollTop - historyEl.clientHeight <= threshold;
+  
+    updateStreamingUI(itemKey, text);
+  
+    // Only scroll if the box expanded AND you were already at the bottom
+    if (historyEl.scrollHeight !== prevHeight && isAtBottom) {
+      historyEl.scrollTop = historyEl.scrollHeight;
+    }
 }
 
 function updateStreamingUI(itemKey, text) {
@@ -290,8 +306,6 @@ function renderHistory(itemKey) {
         <div>${marked.parse(content)}</div>
       </div>`;
   }).join('') + `<div id="live-reply-${itemKey}"></div>`;
-
-  container.scrollTop = container.scrollHeight;
 }
 
 function toggleSubmissionState(itemKey, isStreaming) {
