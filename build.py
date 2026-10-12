@@ -7,7 +7,6 @@ import json
 import re
 import shutil
 import tomllib
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -26,8 +25,14 @@ KANJI_PATTERN: Final[re.Pattern[str]] = re.compile(r"[\u4e00-\u9faf々]")
 MARKDOWN_LEXER: Final[re.Pattern[str]] = re.compile(
     r"(?P<CODE_BLOCK>```[\s\S]*?```)"
     r"|(?P<INLINE_CODE>`[^`\n]+`)"
-    r"|(?P<LINK>\[(?P<link_text>[^\]]+)\]\((?P<link_url>[^)]+)\))"
+    r"|(?P<RUBY><ruby[\s\S]*?<\/ruby>)"
     r"|(?P<HTML_TAG><[^>]+>)"
+    r"|(?P<LINK>\[(?P<link_text>[^\]]+)\]\((?P<link_url>[^)]+)\))"
+)
+
+# Matches continuous Japanese words containing at least one kanji
+JA_KANJI_WORD: Final[re.Pattern[str]] = re.compile(
+    r"[\u4e00-\u9faf々\u3040-\u309f\u30a0-\u30ff]*[\u4e00-\u9faf々]+[\u4e00-\u9faf々\u3040-\u309f\u30a0-\u30ff]*"
 )
 
 # Shared Kakasi converter instance
@@ -99,32 +104,20 @@ def _token_to_ruby(orig: str, hira: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def add_furigana_plain(text: str) -> str:
-    """Tokenizes raw Japanese text and injects furigana."""
-    tokens = kakasi_converter.convert(text)
+def _convert_kanji_word(match: re.Match[str]) -> str:
+    """Converts a single kanji-bearing word into ruby HTML."""
+    tokens = kakasi_converter.convert(match.group(0))
     return "".join(_token_to_ruby(t["orig"], t["hira"]) for t in tokens)
 
 
+def add_furigana_plain(text: str) -> str:
+    """Annotates only Japanese kanji words, preserving all markdown syntax, spaces, and indentation."""
+    return JA_KANJI_WORD.sub(_convert_kanji_word, text)
+
+
 # ---------------------------------------------------------------------------
-# Markdown Token Handlers (Strategy Pattern)
+# Markdown Token Handler
 # ---------------------------------------------------------------------------
-
-
-def _handle_code_block(match: re.Match[str]) -> str:
-    """Leaves multi-line code blocks untouched."""
-    return match.group(0)
-
-
-def _handle_html_tag(match: re.Match[str]) -> str:
-    """Leaves pre-existing HTML markup untouched."""
-    return match.group(0)
-
-
-def _handle_link(match: re.Match[str]) -> str:
-    """Applies furigana strictly to the anchor text, preserving target URL."""
-    anchor = match.group("link_text")
-    url = match.group("link_url")
-    return f"[{add_furigana_plain(anchor)}]({url})"
 
 
 def _handle_inline_code(match: re.Match[str]) -> str:
@@ -138,14 +131,6 @@ def _handle_inline_code(match: re.Match[str]) -> str:
     return match.group(0)
 
 
-TOKEN_HANDLERS: Final[dict[str, Callable[[re.Match[str]], str]]] = {
-    "CODE_BLOCK": _handle_code_block,
-    "INLINE_CODE": _handle_inline_code,
-    "LINK": _handle_link,
-    "HTML_TAG": _handle_html_tag,
-}
-
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -157,21 +142,28 @@ def add_furigana(text: str) -> str:
     cursor = 0
 
     for match in MARKDOWN_LEXER.finditer(text):
-        # 1. Process plain text before this match
         if match.start() > cursor:
-            plain_slice = text[cursor : match.start()]
-            output_chunks.append(add_furigana_plain(plain_slice))
+            output_chunks.append(add_furigana_plain(text[cursor : match.start()]))
 
-        # 2. Dispatch the token to its specialized handler
-        token_type = match.lastgroup
-        if token_type and token_type in TOKEN_HANDLERS:
-            output_chunks.append(TOKEN_HANDLERS[token_type](match))
+        if match.group("CODE_BLOCK"):
+            output_chunks.append(match.group("CODE_BLOCK"))
+        elif match.group("INLINE_CODE"):
+            output_chunks.append(_handle_inline_code(match))
+        elif match.group("RUBY"):
+            output_chunks.append(
+                match.group("RUBY")
+            )  # Preserve existing ruby, prevent double wrapping
+        elif match.group("HTML_TAG"):
+            output_chunks.append(match.group("HTML_TAG"))
+        elif match.group("LINK"):
+            output_chunks.append(
+                f"[{add_furigana_plain(match.group('link_text'))}]({match.group('link_url')})"
+            )
         else:
             output_chunks.append(match.group(0))
 
         cursor = match.end()
 
-    # 3. Process any remaining trailing plain text
     if cursor < len(text):
         output_chunks.append(add_furigana_plain(text[cursor:]))
 
