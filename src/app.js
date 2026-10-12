@@ -155,7 +155,7 @@ function formatExamplePrompt(item, lesson) {
   // {lesson_name}, {lesson}, {japanese}, {english}
   return tpl
     .replaceAll('{lesson_name}', lesson.Lesson || '')
-    .replaceAll('{lesson}', item.Explanation || '')
+    .replaceAll('{lesson}', lesson.Explanation || '')
     .replaceAll('{japanese}', item.Japanese || '')
     .replaceAll('{english}', item.Translation || '');
 }
@@ -217,7 +217,7 @@ async function handleSubmission(itemKey) {
   if (!isLLMSet()) {
     const standalone = `${systemPrompt}\n\nStudent Submission / Question:\n${userText}`;
     await copyToClipboard(standalone);
-    showToast('Formatted prompt copied to clipboard! Paste into chatbot to grade it!');
+    showToast('Prompt copied to clipboard!');
     return;
   }
 
