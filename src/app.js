@@ -204,6 +204,8 @@ function showToast(message) {
 }
 
 async function handleSubmission(itemKey) {
+  // first, open details dropdown to reveal answer
+  openDetails(itemKey);
   const inputEl = document.getElementById(`input-${itemKey}`);
   const userText = inputEl.value.trim();
   if (!userText) return;
@@ -355,6 +357,8 @@ function renderLessonView(lessonKey) {
   const prevKey = keys[curIdx - 1];
   const nextKey = keys[curIdx + 1];
 
+  const getKey = (type, idx) => `${lessonKey}-${type}-${idx}`;
+
   app.innerHTML = `
     <article>
       <h1 class="lesson-title">${lesson.Lesson}</h1>
@@ -364,12 +368,12 @@ function renderLessonView(lessonKey) {
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">${item.Japanese}</div>
-          <details>
+          <details id="details-${getKey('ex', idx)}">
             <summary>Details &amp; Practice</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Meaning:</strong> ${item.Translation}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(`${lessonKey}-ex-${idx}`)}
+              ${renderSubmissionDiv(getKey('ex', idx))}
             </div>
           </details>
         </div>
@@ -379,14 +383,14 @@ function renderLessonView(lessonKey) {
       ${(lesson['15 Practice Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">${item.English}</div>
-          <details>
+          <details id="details-${getKey('tr', idx)}">
             <summary>Answer &amp; Practice</summary>
             <div class="details-content">
-              <div class="meta-block"><strong>Reference:</strong> ${(item['Reference Answers'] || []).join(' / ')}</div>
+              <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(`${lessonKey}-tr-${idx}`)}
             </div>
           </details>
+          ${renderSubmissionDiv(getKey('tr', idx))}
         </div>
       `).join('')}
 
@@ -394,15 +398,15 @@ function renderLessonView(lessonKey) {
       ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">${item['Respond-able statement']}</div>
-          <details>
+          <details id="details-${getKey('resp', idx)}">
             <summary>Context &amp; Practice</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Context:</strong> ${item.Context}</div>
-              <div class="meta-block"><strong>Reference:</strong> ${(item['Reference Answers'] || []).join(' / ')}</div>
+              <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(`${lessonKey}-resp-${idx}`)}
             </div>
           </details>
+          ${renderSubmissionDiv(getKey('resp', idx))}
         </div>
       `).join('')}
 
@@ -574,6 +578,16 @@ function escapeHtml(str) {
   return (str || '').replace(/[&<>'"]/g, tag => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   }[tag] || tag));
+}
+
+function renderReferenceAnswers(answers) {
+  if (!Array.isArray(answers) || answers.length === 0) return '';
+  return `<ul class="reference-answers">${answers.map(a => `<li>${a}</li>`).join('')}</ul>`;
+}
+
+function openDetails(itemKey) {
+  const detailsEl = document.getElementById(`details-${itemKey}`);
+  detailsEl.open = true;
 }
 
 // Helper func to allow for copying when testing on localhost
