@@ -1,7 +1,9 @@
-name: Deploy to GitHub Pages
+name: CI & Deploy
 
 on:
   push:
+    # Runs validation on EVERY branch push
+  pull_request:
     branches:
       - main
   workflow_dispatch:
@@ -16,19 +18,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    name: Lint, Syntax & Build Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 1. Syntax & Data Checks
+      - name: Check Python Syntax
+        run: python -m py_compile build.py
+
+      - name: Check JavaScript Syntax
+        run: node --check src/app.js
+
+      - name: Validate HTML
+        run: npx --yes htmlhint src/index.html
+
+      - name: Validate CSS
+        run: npx --yes csstree-validator src/style.css
+
+      - name: Validate Data Files
+        run: |
+          python -c "import json; json.load(open('data/lessons.json', 'r', encoding='utf-8'))"
+          python -c "import tomllib; tomllib.load(open('data/system_prompts.toml', 'rb'))"
+
+      # 2. Test Build (verifies dist/ compiles without error on your branch)
+      - name: Test Build Script
+        run: python build.py
+
   build-and-deploy:
+    name: Deploy to GitHub Pages
+    needs: validate
+    # ONLY deploys when pushing directly to main
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -39,10 +86,10 @@ jobs:
         run: python build.py
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: './dist'
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

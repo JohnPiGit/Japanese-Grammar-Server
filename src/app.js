@@ -160,7 +160,7 @@ function formatExamplePrompt(item, lesson) {
     .replaceAll('{english}', item.Translation || '');
 }
 
-function formatPracticeTranslationPrompt(item, lesson) {
+function formatPracticeTranslationPrompt(item) {
   const tpl = window.SYSTEM_PROMPTS?.practice_translation_system_prompt || '';
   // {english}, {answers}
   return tpl
@@ -168,7 +168,7 @@ function formatPracticeTranslationPrompt(item, lesson) {
     .replaceAll('{answers}', (item['Reference Answers'] || []).join('\n'));
 }
 
-function formatPracticeRespondPrompt(item, lesson) {
+function formatPracticeRespondPrompt(item) {
   const tpl = window.SYSTEM_PROMPTS?.practice_respond_system_prompt || '';
   // {statement}, {context}, {answers}
   return tpl
@@ -179,8 +179,8 @@ function formatPracticeRespondPrompt(item, lesson) {
 
 function makeSystemPrompt(sectionType, item, lesson) {
   if (sectionType === 'Examples') return formatExamplePrompt(item, lesson);
-  if (sectionType === 'Translation Practice') return formatPracticeTranslationPrompt(item, lesson);
-  if (sectionType === '返答練習 Sentences') return formatPracticeRespondPrompt(item, lesson);
+  if (sectionType === 'Translation Practice') return formatPracticeTranslationPrompt(item);
+  if (sectionType === '返答練習 Sentences') return formatPracticeRespondPrompt(item);
   return '';
 }
 
@@ -203,14 +203,18 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.add('hidden'), 3500);
 }
 
-async function handleSubmission(itemKey, systemPrompt) {
+async function handleSubmission(itemKey) {
   const inputEl = document.getElementById(`input-${itemKey}`);
   const userText = inputEl.value.trim();
   if (!userText) return;
 
+  const { sectionType, item } = getSectionTypeItem(itemKey);
+  const lesson = getLesson(itemKey);
+  const systemPrompt = makeSystemPrompt(sectionType, item, lesson);
+
   if (!isLLMSet()) {
     const standalone = `${systemPrompt}\n\nStudent Submission / Question:\n${userText}`;
-    await navigator.clipboard.writeText(standalone);
+    await copyToClipboard(standalone);
     showToast('Formatted prompt copied to clipboard! Paste into chatbot to grade it!');
     return;
   }
@@ -308,17 +312,14 @@ function clearChat(itemKey) {
 /* ==========================================================================
    Component & View Rendering
    ========================================================================== */
-function renderSubmissionDiv(itemKey, sectionType, item, lesson) {
-  const systemPrompt = makeSystemPrompt(sectionType, item, lesson);
-  const safePrompt = escapeAttr(systemPrompt);
-
+function renderSubmissionDiv(itemKey) {
   return `
     <div class="submission-container">
       <div id="history-${itemKey}" class="chat-history"></div>
       <div class="submission-controls">
         <input type="text" id="input-${itemKey}" placeholder="Type your answer or question..."
-               onkeydown="if(event.key==='Enter') handleSubmission('${itemKey}', '${safePrompt}')">
-        <button id="submit-btn-${itemKey}" class="btn btn-primary" onclick="handleSubmission('${itemKey}', '${safePrompt}')">Submit</button>
+               onkeydown="if(event.key==='Enter') handleSubmission('${itemKey}')">
+        <button id="submit-btn-${itemKey}" class="btn btn-primary" onclick="handleSubmission('${itemKey}')">Submit</button>
         <button id="stop-btn-${itemKey}" class="btn btn-danger hidden" onclick="cancelStream('${itemKey}')">Stop</button>
         <button class="btn btn-secondary" onclick="clearChat('${itemKey}')">Clear</button>
       </div>
@@ -354,7 +355,7 @@ function renderLessonView(lessonKey) {
             <div class="details-content">
               <div class="meta-block"><strong>Meaning:</strong> ${item.Translation}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(`${lessonKey}-ex-${idx}`, 'Examples', item, lesson)}
+              ${renderSubmissionDiv(`${lessonKey}-ex-${idx}`)}
             </div>
           </details>
         </div>
@@ -369,7 +370,7 @@ function renderLessonView(lessonKey) {
             <div class="details-content">
               <div class="meta-block"><strong>Reference:</strong> ${(item['Reference Answers'] || []).join(' / ')}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(`${lessonKey}-tr-${idx}`, 'Translation Practice', item, lesson)}
+              ${renderSubmissionDiv(`${lessonKey}-tr-${idx}`)}
             </div>
           </details>
         </div>
@@ -385,7 +386,7 @@ function renderLessonView(lessonKey) {
               <div class="meta-block"><strong>Context:</strong> ${item.Context}</div>
               <div class="meta-block"><strong>Reference:</strong> ${(item['Reference Answers'] || []).join(' / ')}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(`${lessonKey}-resp-${idx}`, '返答練習 Sentences', item, lesson)}
+              ${renderSubmissionDiv(`${lessonKey}-resp-${idx}`)}
             </div>
           </details>
         </div>
@@ -520,6 +521,39 @@ function bindConfigUI() {
 }
 
 /* ==========================================================================
+   Item Key Resolution Helpers
+   ========================================================================== */
+
+const SECTION_MAP = {
+  ex: { type: 'Examples', field: '10 Example Sentences' },
+  tr: { type: 'Translation Practice', field: '15 Practice Sentences' },
+  resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
+};
+
+function parseItemKey(itemKey) {
+  const match = itemKey?.match(/^(.*)-(ex|tr|resp)-(\d+)$/);
+  return match ? { lessonKey: match[1], code: match[2], index: Number(match[3]) } : null;
+}
+
+function getLesson(itemKey) {
+  const parsed = parseItemKey(itemKey);
+  const key = parsed ? parsed.lessonKey : itemKey;
+  return window.LESSONS_DATA?.[key]?.['normal'] || null;
+}
+
+// Get both the `SectionType` and `item` corresponding to the `itemKey` (uses the normal mode, as furigana is just for the display)
+function getSectionTypeItem(itemKey) {
+  const parsed = parseItemKey(itemKey);
+  if (!parsed || !SECTION_MAP[parsed.code]) return { sectionType: null, item: null };
+
+  const { type, field } = SECTION_MAP[parsed.code];
+  const lesson = getLesson(itemKey);
+  const item = lesson?.[field]?.[parsed.index] || null;
+
+  return { sectionType: type, item };
+}
+
+/* ==========================================================================
    Utilities & Initialization
    ========================================================================== */
 function escapeHtml(str) {
@@ -528,8 +562,24 @@ function escapeHtml(str) {
   }[tag] || tag));
 }
 
-function escapeAttr(str) {
-  return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+// Helper func to allow for copying when testing on localhost
+async function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text);
+  }
+  // Fallback for non-secure contexts (file:// or LAN IP testing)
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    document.execCommand('copy');
+  } finally {
+    document.body.removeChild(ta);
+  }
 }
 
 async function init() {
