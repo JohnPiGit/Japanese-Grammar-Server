@@ -437,7 +437,7 @@ function renderLessonView(lessonKey) {
         <div class="item-card">
           <div class="prompt-text">${item.Japanese}</div>
           <details id="details-${getKey('ex', idx)}">
-            <summary>Details &amp; Practice</summary>
+            <summary>Translation</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Meaning:</strong> ${item.Translation}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
@@ -455,7 +455,7 @@ function renderLessonView(lessonKey) {
             ${idx + 1}. ${item.English}
           </div>
           <details id="details-${getKey('tr', idx)}">
-            <summary>Answer &amp; Practice</summary>
+            <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
@@ -528,7 +528,10 @@ function formatProgressRatio(current, total) {
 
 // TODO: make function to create (x/y) for a section
 // then make it a button that clears all the answers for that section
+// then make that button set all answers for that section if it's empty
 // then add that to each section on a lesson
+// Then make certain buttons not tab-able
+// Then add button class to 日本語文法
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
   const trTotal = keysBySection.tr?.length || 0;
