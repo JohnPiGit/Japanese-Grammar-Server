@@ -526,6 +526,9 @@ function formatProgressRatio(current, total) {
   return `<span class="progress-ratio ${statusClass}">(${current}/${total})</span>`;
 }
 
+// TODO: make function to create (x/y) for a section
+// then make it a button that clears all the answers for that section
+// then add that to each section on a lesson
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
   const trTotal = keysBySection.tr?.length || 0;
