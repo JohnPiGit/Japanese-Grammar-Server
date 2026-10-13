@@ -2,6 +2,7 @@
    State & Configuration Management
    ========================================================================== */
 const CONFIG_KEY = 'jp_grammar_study_config';
+const ANSWERED_KEY = 'jp_grammar_answered_items';
 
 const state = {
   config: {
@@ -10,7 +11,9 @@ const state = {
     selectedModel: '',
     furiganaEnabled: false,
   },
-  apiKey: '', // In-memory only!
+  answeredItems: new Set(),
+  // In-memory only!
+  apiKey: '',
   chatHistories: new Map(),
   activeControllers: new Map(),
 };
@@ -28,6 +31,46 @@ function loadStoredConfig() {
 
 function saveConfig() {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(state.config));
+}
+
+function loadAnsweredItems() {
+  const saved = localStorage.getItem(ANSWERED_KEY);
+  if (saved) {
+    try {
+      state.answeredItems = new Set(JSON.parse(saved));
+    } catch (e) {
+      console.error('Failed to parse answered items:', e);
+    }
+  }
+}
+
+function saveAnsweredItems() {
+  localStorage.setItem(ANSWERED_KEY, JSON.stringify(Array.from(state.answeredItems)));
+}
+
+/* ==========================================================================
+   Answer history functions
+   ========================================================================== */
+function markItemAnswered(itemKey) {
+  document.getElementById(`check-${itemKey}`)?.classList.remove('hidden');
+  state.answeredItems.add(itemKey);
+  saveAnsweredItems();
+}
+
+function unMarkItemAnswered(itemKey) {
+  document.getElementById(`check-${itemKey}`)?.classList.add('hidden');
+  state.answeredItems.delete(itemKey);
+  saveAnsweredItems();
+}
+
+function makeCheckSpanButton(itemKey) {
+  return `<button id="check-${itemKey}" class="check-mark-btn hidden" title="Mark as uncompleted" onclick="unMarkItemAnswered('${itemKey}')">✓</button>`;
+}
+
+function applyAnsweredCheckmarks() {
+  for (const itemKey of state.answeredItems) {
+    document.getElementById(`check-${itemKey}`)?.classList.remove('hidden');
+  }
 }
 
 function isLLMSet() {
@@ -221,8 +264,9 @@ function showToast(message) {
 }
 
 async function handleSubmission(itemKey) {
-  // first, open details dropdown to reveal answer
+  // first, open details dropdown to reveal answer and mark the answer as "answered"
   openDetails(itemKey);
+  markItemAnswered(itemKey);
   const inputEl = document.getElementById(`input-${itemKey}`);
   const userText = inputEl.value.trim();
   if (!userText) return;
@@ -406,7 +450,10 @@ function renderLessonView(lessonKey) {
       <h2 class="section-title">練習問題 (Translation Practice)</h2>
       ${(lesson['15 Practice Sentences'] || []).map((item, idx) => `
         <div class="item-card">
-          <div class="prompt-text">${item.English}</div>
+          <div class="prompt-text">
+            ${makeCheckSpanButton(getKey('tr', idx))}
+            ${idx + 1}. ${item.English}
+          </div>
           <details id="details-${getKey('tr', idx)}">
             <summary>Answer &amp; Practice</summary>
             <div class="details-content">
@@ -421,7 +468,10 @@ function renderLessonView(lessonKey) {
       <h2 class="section-title">返答練習 (Response Practice)</h2>
       ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => `
         <div class="item-card">
-          <div class="prompt-text">${item['Respond-able statement']}</div>
+          <div class="prompt-text">
+            ${makeCheckSpanButton(getKey('resp', idx))}
+            ${idx + 1}. ${item['Respond-able statement']}
+          </div>
           <details id="context-details-${getKey('resp', idx)}">
             <summary>Context</summary>
             <div class="details-content">
@@ -455,7 +505,7 @@ function renderIndexView() {
 
   const links = Object.entries(data).map(([key, val]) => {
     const title = val[mode]?.Lesson || key;
-    return `<li><a href="#/lesson/${key}">${title}</a></li>`;
+    return `<li>${completedSentences(key)} <a href="#/lesson/${key}">${title}</a></li>`;
   }).join('');
 
   app.innerHTML = `
@@ -466,6 +516,30 @@ function renderIndexView() {
   `;
 }
 
+function formatProgressRatio(current, total) {
+  let statusClass = 'progress-none';
+  if (total > 0 && current === total) {
+    statusClass = 'progress-complete';
+  } else if (current > 0) {
+    statusClass = 'progress-partial';
+  }
+  return `<span class="progress-ratio ${statusClass}">(${current}/${total})</span>`;
+}
+
+function completedSentences(lessonKey) {
+  const keysBySection = allKeysBySection(lessonKey);
+  const trTotal = keysBySection.tr?.length || 0;
+  const respTotal = keysBySection.resp?.length || 0;
+
+  const trAnsNum = countIntersection(state.answeredItems, keysBySection.tr || []);
+  const respAnsNum = countIntersection(state.answeredItems, keysBySection.resp || []);
+
+  const trBadge = formatProgressRatio(trAnsNum, trTotal);
+  const respBadge = formatProgressRatio(respAnsNum, respTotal);
+
+  return `${trBadge} || ${respBadge}`;
+}
+
 function router() {
   const hash = window.location.hash || '#/';
   if (hash.startsWith('#/lesson/')) {
@@ -474,6 +548,7 @@ function router() {
     renderIndexView();
   }
   window.scrollTo(0, 0);
+  applyAnsweredCheckmarks()
 }
 
 /* ==========================================================================
@@ -599,6 +674,25 @@ function getSectionTypeItem(itemKey) {
   return { sectionType: type, item };
 }
 
+function allKeysBySection(lessonKey) {
+  const lesson = window.LESSONS_DATA?.[lessonKey]?.normal;
+  const keys = {};
+
+  for (const [section, { field }] of Object.entries(SECTION_MAP)) {
+    const val = lesson?.[field];
+
+    if (Array.isArray(val)) {
+      keys[section] = val.map((_, idx) => `${lessonKey}-${section}-${idx}`);
+    } else if (typeof val === 'string' && val.trim()) {
+      keys[section] = [`${lessonKey}-${section}-0`];
+    } else {
+      keys[section] = [];
+    }
+  }
+
+  return keys;
+}
+
 /* ==========================================================================
    Utilities & Initialization
    ========================================================================== */
@@ -606,6 +700,12 @@ function escapeHtml(str) {
   return (str || '').replace(/[&<>'"]/g, tag => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   }[tag] || tag));
+}
+
+
+// Counts the number of elements that intersect between the itemsSet  and the itemList
+function countIntersection(itemSet, itemList) {
+  return itemList.reduce((count, key) => count + (itemSet.has(key) ? 1 : 0), 0);
 }
 
 function renderReferenceAnswers(answers) {
@@ -648,6 +748,7 @@ async function copyToClipboard(text) {
 
 async function init() {
   loadStoredConfig();
+  loadAnsweredItems();
   bindConfigUI();
 
   try {
