@@ -150,6 +150,30 @@ async function readSSE(response, onLine) {
 /* ==========================================================================
    Prompt Formatting
    ========================================================================== */
+
+const SECTION_MAP = {
+  ls: { type: 'Lesson', field: 'Explanation' },
+  ex: { type: 'Examples', field: '10 Example Sentences' },
+  tr: { type: 'Translation Practice', field: '15 Practice Sentences' },
+  resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
+};
+
+function makeSystemPrompt(sectionType, item, lesson) {
+  if (sectionType === SECTION_MAP.ls.type) return formatLessonPrompt(lesson);
+  if (sectionType === SECTION_MAP.ex.type) return formatExamplePrompt(item, lesson);
+  if (sectionType === SECTION_MAP.tr.type) return formatPracticeTranslationPrompt(item);
+  if (sectionType === SECTION_MAP.resp.type) return formatPracticeRespondPrompt(item);
+  return '';
+}
+
+function formatLessonPrompt(lesson) {
+  const tpl = window.SYSTEM_PROMPTS?.lesson_system_prompt || '';
+  // {lesson_name}, {lesson}, {japanese}, {english}
+  return tpl
+    .replaceAll('{lesson_name}', lesson.Lesson || '')
+    .replaceAll('{lesson}', lesson.Explanation || '')
+}
+
 function formatExamplePrompt(item, lesson) {
   const tpl = window.SYSTEM_PROMPTS?.example_system_prompt || '';
   // {lesson_name}, {lesson}, {japanese}, {english}
@@ -175,13 +199,6 @@ function formatPracticeRespondPrompt(item) {
     .replaceAll('{statement}', item['Respond-able statement'] || '')
     .replaceAll('{context}', item.Context || '')
     .replaceAll('{answers}', (item['Reference Answers'] || []).join('\n'));
-}
-
-function makeSystemPrompt(sectionType, item, lesson) {
-  if (sectionType === 'Examples') return formatExamplePrompt(item, lesson);
-  if (sectionType === 'Translation Practice') return formatPracticeTranslationPrompt(item);
-  if (sectionType === '返答練習 Sentences') return formatPracticeRespondPrompt(item);
-  return '';
 }
 
 /* ==========================================================================
@@ -328,12 +345,12 @@ function clearChat(itemKey) {
 /* ==========================================================================
    Component & View Rendering
    ========================================================================== */
-function renderSubmissionDiv(itemKey) {
+function renderSubmissionDiv(itemKey, placeholder) {
   return `
     <div class="submission-container">
       <div id="history-${itemKey}" class="chat-history"></div>
       <div class="submission-controls">
-        <input type="text" id="input-${itemKey}" placeholder="Type your answer or question..."
+        <input type="text" id="input-${itemKey}" placeholder="${placeholder}"
                onkeydown="if(event.key==='Enter') handleSubmission('${itemKey}')">
         <button id="submit-btn-${itemKey}" class="btn btn-primary" onclick="handleSubmission('${itemKey}')">Submit</button>
         <button id="stop-btn-${itemKey}" class="btn btn-danger hidden" onclick="cancelStream('${itemKey}')">Stop</button>
@@ -358,11 +375,18 @@ function renderLessonView(lessonKey) {
   const nextKey = keys[curIdx + 1];
 
   const getKey = (type, idx) => `${lessonKey}-${type}-${idx}`;
+  const lessonPlaceholder = "Ask a question about the lesson..."
+  const examplePlaceholder = "Ask a question about this example..."
+  const answerPlaceholder = "type your answer or follow-up question..."
 
   app.innerHTML = `
     <article>
       <h1 class="lesson-title">${lesson.Lesson}</h1>
-      <section class="explanation-box">${marked.parse(lesson.Explanation || '')}</section>
+      <section class="explanation-box">
+        ${marked.parse(lesson.Explanation || '')}
+        ${renderSubmissionDiv(getKey('ls', 0), lessonPlaceholder)}
+      </section>
+
 
       <h2 class="section-title">例文 (Examples)</h2>
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => `
@@ -373,7 +397,7 @@ function renderLessonView(lessonKey) {
             <div class="details-content">
               <div class="meta-block"><strong>Meaning:</strong> ${item.Translation}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(getKey('ex', idx))}
+              ${renderSubmissionDiv(getKey('ex', idx), examplePlaceholder)}
             </div>
           </details>
         </div>
@@ -390,7 +414,7 @@ function renderLessonView(lessonKey) {
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey('tr', idx))}
+          ${renderSubmissionDiv(getKey('tr', idx), answerPlaceholder)}
         </div>
       `).join('')}
 
@@ -411,7 +435,7 @@ function renderLessonView(lessonKey) {
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey('resp', idx))}
+          ${renderSubmissionDiv(getKey('resp', idx), answerPlaceholder)}
         </div>
       `).join('')}
 
@@ -548,14 +572,12 @@ function bindConfigUI() {
    Item Key Resolution Helpers
    ========================================================================== */
 
-const SECTION_MAP = {
-  ex: { type: 'Examples', field: '10 Example Sentences' },
-  tr: { type: 'Translation Practice', field: '15 Practice Sentences' },
-  resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
-};
+// Build the regex pattern once from the SECTION_MAP keys for less hardcoding
+const sectionCodes = Object.keys(SECTION_MAP).join('|');
+const ITEM_KEY_REGEX = new RegExp(`^(.*)-(${sectionCodes})-(\\d+)$`);
 
 function parseItemKey(itemKey) {
-  const match = itemKey?.match(/^(.*)-(ex|tr|resp)-(\d+)$/);
+  const match = itemKey?.match(ITEM_KEY_REGEX);
   return match ? { lessonKey: match[1], code: match[2], index: Number(match[3]) } : null;
 }
 
@@ -593,7 +615,9 @@ function renderReferenceAnswers(answers) {
 
 function openDetails(itemKey) {
   const detailsEl = document.getElementById(`details-${itemKey}`);
-  detailsEl.open = true;
+  if (detailsEl) {
+    detailsEl.open = true;
+  }
 
   // catch-all that tries to open the context details/dropdown (will do nothing if there is no associated dropdown)
   const contextDetailsEl = document.getElementById(`context-details-${itemKey}`);
