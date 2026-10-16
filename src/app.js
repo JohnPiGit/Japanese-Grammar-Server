@@ -4,6 +4,20 @@
 const CONFIG_KEY = 'jp_grammar_study_config';
 const ANSWERED_KEY = 'jp_grammar_answered_items';
 
+// These must be the same as the `SECTION_MAP` keys!
+const LESSON_SEC = 'ls'; // lesson/explanation
+const EXAMPLE_SEC = 'ex'; // examples
+const TRANSLATION_SEC = 'tr'; // translation practice
+const RESPONSE_SEC = 'resp'; // response practice
+
+const SECTION_MAP = {
+  ls: { type: 'Lesson', field: 'Explanation' },
+  ex: { type: 'Examples', field: '10 Example Sentences' },
+  tr: { type: 'Translation Practice', field: '15 Practice Sentences' },
+  resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
+};
+
+
 const state = {
   config: {
     provider: 'OpenAI',
@@ -14,6 +28,7 @@ const state = {
   answeredItems: new Set(),
   // In-memory only!
   apiKey: '',
+  lessonKey: '',
   chatHistories: new Map(),
   activeControllers: new Map(),
 };
@@ -55,12 +70,14 @@ function markItemAnswered(itemKey) {
   document.getElementById(`check-${itemKey}`)?.classList.remove('hidden');
   state.answeredItems.add(itemKey);
   saveAnsweredItems();
+  updateLessonProgress(state.lessonKey);
 }
 
 function unMarkItemAnswered(itemKey) {
   document.getElementById(`check-${itemKey}`)?.classList.add('hidden');
   state.answeredItems.delete(itemKey);
   saveAnsweredItems();
+  updateLessonProgress(state.lessonKey);
 }
 
 function makeCheckSpanButton(itemKey) {
@@ -193,13 +210,6 @@ async function readSSE(response, onLine) {
 /* ==========================================================================
    Prompt Formatting
    ========================================================================== */
-
-const SECTION_MAP = {
-  ls: { type: 'Lesson', field: 'Explanation' },
-  ex: { type: 'Examples', field: '10 Example Sentences' },
-  tr: { type: 'Translation Practice', field: '15 Practice Sentences' },
-  resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
-};
 
 function makeSystemPrompt(sectionType, item, lesson) {
   if (sectionType === SECTION_MAP.ls.type) return formatLessonPrompt(lesson);
@@ -407,6 +417,7 @@ function renderLessonView(lessonKey) {
   const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';
   const lesson = window.LESSONS_DATA?.[lessonKey]?.[mode];
   const app = document.getElementById('app');
+  const keysBySection = allKeysBySection(lessonKey);
 
   if (!lesson) {
     app.innerHTML = `<p>Lesson not found. <a href="#/">Back to lessons</a></p>`;
@@ -428,7 +439,7 @@ function renderLessonView(lessonKey) {
       <h1 class="lesson-title">${lesson.Lesson}</h1>
       <section class="explanation-box">
         ${marked.parse(lesson.Explanation || '')}
-        ${renderSubmissionDiv(getKey('ls', 0), lessonPlaceholder)}
+        ${renderSubmissionDiv(getKey(LESSON_SEC, 0), lessonPlaceholder)}
       </section>
 
 
@@ -436,56 +447,56 @@ function renderLessonView(lessonKey) {
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">${item.Japanese}</div>
-          <details id="details-${getKey('ex', idx)}">
+          <details id="details-${getKey(EXAMPLE_SEC, idx)}">
             <summary>Translation</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Meaning:</strong> ${item.Translation}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(getKey('ex', idx), examplePlaceholder)}
+              ${renderSubmissionDiv(getKey(EXAMPLE_SEC, idx), examplePlaceholder)}
             </div>
           </details>
         </div>
       `).join('')}
 
-      <h2 class="section-title">練習問題 (Translation Practice)</h2>
+      <h2 class="section-title">練習問題 (Translation Practice) ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
       ${(lesson['15 Practice Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">
-            ${makeCheckSpanButton(getKey('tr', idx))}
+            ${makeCheckSpanButton(getKey(TRANSLATION_SEC, idx))}
             ${idx + 1}. ${item.English}
           </div>
-          <details id="details-${getKey('tr', idx)}">
+          <details id="details-${getKey(TRANSLATION_SEC, idx)}">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey('tr', idx), answerPlaceholder)}
+          ${renderSubmissionDiv(getKey(TRANSLATION_SEC, idx), answerPlaceholder)}
         </div>
       `).join('')}
 
-      <h2 class="section-title">返答練習 (Response Practice)</h2>
+      <h2 class="section-title">返答練習 (Response Practice) ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}</h2>
       ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">
-            ${makeCheckSpanButton(getKey('resp', idx))}
+            ${makeCheckSpanButton(getKey(RESPONSE_SEC, idx))}
             ${idx + 1}. ${item['Respond-able statement']}
           </div>
-          <details id="context-details-${getKey('resp', idx)}">
+          <details id="context-details-${getKey(RESPONSE_SEC, idx)}">
             <summary>Context</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Context:</strong> ${item.Context}</div>
             </div>
           </details>
-          <details id="details-${getKey('resp', idx)}">
+          <details id="details-${getKey(RESPONSE_SEC, idx)}">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey('resp', idx), answerPlaceholder)}
+          ${renderSubmissionDiv(getKey(RESPONSE_SEC, idx), answerPlaceholder)}
         </div>
       `).join('')}
 
@@ -526,30 +537,49 @@ function formatProgressRatio(current, total) {
   return `<span class="progress-ratio ${statusClass}">(${current}/${total})</span>`;
 }
 
-// TODO: make function to create (x/y) for a section
+// a setion is a key of SECTION_MAP (i.e. ls, ex, tr, resp)
+function progressBySection(keysBySection, section) {
+  const total = keysBySection[section]?.length || 0;
+  const ansNum = countIntersection(state.answeredItems, keysBySection[section] || []);
+  return formatProgressRatio(ansNum, total);
+}
+
+function _sectionProgressID(lessonKey, section) {
+  return `${lessonKey}-${section}-section-progress`
+}  
+
+// a setion is a key of SECTION_MAP (i.e. ls, ex, tr, resp)
+function progressBySectionWithID(keysBySection, lessonKey, section) {
+  const progress = progressBySection(keysBySection, section);
+  return `<span id="${_sectionProgressID(lessonKey, section)}">${progress}</span>`
+}  
+
 // then make it a button that clears all the answers for that section
 // then make that button set all answers for that section if it's empty
-// then add that to each section on a lesson
 // Then make certain buttons not tab-able
 // Then add button class to 日本語文法
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
-  const trTotal = keysBySection.tr?.length || 0;
-  const respTotal = keysBySection.resp?.length || 0;
+  return `${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)} || ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}`;
+}
 
-  const trAnsNum = countIntersection(state.answeredItems, keysBySection.tr || []);
-  const respAnsNum = countIntersection(state.answeredItems, keysBySection.resp || []);
+function updateLessonProgress(lessonKey) {
+  const keysBySection = allKeysBySection(lessonKey);
+  const trBadge = progressBySection(keysBySection, TRANSLATION_SEC);
+  const respBadge = progressBySection(keysBySection, RESPONSE_SEC);
 
-  const trBadge = formatProgressRatio(trAnsNum, trTotal);
-  const respBadge = formatProgressRatio(respAnsNum, respTotal);
+  const trEl = document.getElementById(_sectionProgressID(lessonKey, TRANSLATION_SEC));
+  const respEl = document.getElementById(_sectionProgressID(lessonKey, RESPONSE_SEC));
 
-  return `${trBadge} || ${respBadge}`;
+  trEl.innerHTML = trBadge;
+  respEl.innerHTML = respBadge;
 }
 
 function router() {
   const hash = window.location.hash || '#/';
   if (hash.startsWith('#/lesson/')) {
-    renderLessonView(hash.replace('#/lesson/', ''));
+    state.lessonKey = hash.replace('#/lesson/', '') 
+    renderLessonView(state.lessonKey);
   } else {
     renderIndexView();
   }
