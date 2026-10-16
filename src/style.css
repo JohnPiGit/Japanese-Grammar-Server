@@ -149,7 +149,7 @@ summary { cursor: pointer; color: var(--text-muted); font-size: 0.9rem; user-sel
 .meta-block { margin-bottom: 0.5rem; font-size: 0.9rem; }
 .meta-block strong { color: var(--text-muted); }
 
-/* Check mark for answered items */
+/* Check mark and progress for answered items */
 .check-mark-btn {
   background: none;
   border: none;
@@ -173,20 +173,38 @@ summary { cursor: pointer; color: var(--text-muted); font-size: 0.9rem; user-sel
   transform: scale(0.95);
 }
 
-/* 0 / x */
-.progress-ratio.progress-none {
-  color: inherit; /* Normal text color (or #888 for muted) */
+.progress-ratio-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 0.15s, transform 0.1s;
 }
 
-/* y / x (where 0 < y < x) */
-.progress-ratio.progress-partial {
-  color: #f59e0b; /* Amber / Orange */
+.progress-ratio-btn:hover {
+  opacity: 0.7;
+  transform: scale(1.08);
+}
+
+.progress-ratio-btn:active {
+  transform: scale(0.95);
+}
+/* Status colors apply directly to the button */
+.progress-ratio-btn.progress-none {
+  color: inherit;
+}
+
+.progress-ratio-btn.progress-partial {
+  color: #f59e0b;
   font-weight: 600;
 }
 
-/* x / x */
-.progress-ratio.progress-complete {
-  color: #10b981; /* Green */
+.progress-ratio-btn.progress-complete {
+  color: #10b981;
   font-weight: 600;
 }
 

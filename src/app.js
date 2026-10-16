@@ -66,16 +66,25 @@ function saveAnsweredItems() {
 /* ==========================================================================
    Answer history functions
    ========================================================================== */
-function markItemAnswered(itemKey) {
+
+function _markAnswered(itemKey) {
   document.getElementById(`check-${itemKey}`)?.classList.remove('hidden');
   state.answeredItems.add(itemKey);
+}
+
+function _unMarkAnswered(itemKey) {
+  document.getElementById(`check-${itemKey}`)?.classList.add('hidden');
+  state.answeredItems.delete(itemKey);
+}
+
+function markItemAnswered(itemKey) {
+  _markAnswered(itemKey);
   saveAnsweredItems();
   updateLessonProgress(state.lessonKey);
 }
 
 function unMarkItemAnswered(itemKey) {
-  document.getElementById(`check-${itemKey}`)?.classList.add('hidden');
-  state.answeredItems.delete(itemKey);
+  _unMarkAnswered(itemKey);
   saveAnsweredItems();
   updateLessonProgress(state.lessonKey);
 }
@@ -527,58 +536,71 @@ function renderIndexView() {
   `;
 }
 
-function formatProgressRatio(current, total) {
+function toggleSectionProgress(lessonKey, section) {
+  const keys = allKeysBySection(lessonKey)[section] || [];
+  const action = countIntersection(state.answeredItems, keys) > 0 ? _unMarkAnswered : _markAnswered;
+
+  keys.forEach(action);
+  saveAnsweredItems();
+  updateLessonProgress(lessonKey);
+}
+
+function formatProgressRatio(current, total, lessonKey, section) {
   let statusClass = 'progress-none';
   if (total > 0 && current === total) {
     statusClass = 'progress-complete';
   } else if (current > 0) {
     statusClass = 'progress-partial';
   }
-  return `<span class="progress-ratio ${statusClass}">(${current}/${total})</span>`;
+
+  const hint = current > 0 ? 'CLEAR progress' : 'Mark all COMPLETE';
+  const clickAttr = (lessonKey && section)
+    ? `onclick="toggleSectionProgress('${lessonKey}', '${section}')"`
+    : '';
+
+  return `<button type="button" class="progress-ratio-btn ${statusClass}" title="${hint}" ${clickAttr}>(${current}/${total})</button>`;
 }
 
-// a setion is a key of SECTION_MAP (i.e. ls, ex, tr, resp)
-function progressBySection(keysBySection, section) {
+// a section is a key of SECTION_MAP (i.e. ls, ex, tr, resp)
+function progressBySection(keysBySection, lessonKey, section) {
   const total = keysBySection[section]?.length || 0;
   const ansNum = countIntersection(state.answeredItems, keysBySection[section] || []);
-  return formatProgressRatio(ansNum, total);
+  return formatProgressRatio(ansNum, total, lessonKey, section);
 }
 
 function _sectionProgressID(lessonKey, section) {
   return `${lessonKey}-${section}-section-progress`
-}  
+}
 
 // a setion is a key of SECTION_MAP (i.e. ls, ex, tr, resp)
 function progressBySectionWithID(keysBySection, lessonKey, section) {
-  const progress = progressBySection(keysBySection, section);
-  return `<span id="${_sectionProgressID(lessonKey, section)}">${progress}</span>`
-}  
+  const progress = progressBySection(keysBySection, lessonKey, section);
+  return `<span id="${_sectionProgressID(lessonKey, section)}">${progress}</span>`;
+}
 
-// then make it a button that clears all the answers for that section
-// then make that button set all answers for that section if it's empty
+function updateLessonProgress(lessonKey) {
+  const keysBySection = allKeysBySection(lessonKey);
+  const trBadge = progressBySection(keysBySection, lessonKey, TRANSLATION_SEC);
+  const respBadge = progressBySection(keysBySection, lessonKey, RESPONSE_SEC);
+
+  const trEl = document.getElementById(_sectionProgressID(lessonKey, TRANSLATION_SEC));
+  const respEl = document.getElementById(_sectionProgressID(lessonKey, RESPONSE_SEC));
+
+  if (trEl) trEl.innerHTML = trBadge;
+  if (respEl) respEl.innerHTML = respBadge;
+}
+
+// TODO:
 // Then make certain buttons not tab-able
-// Then add button class to 日本語文法
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
   return `${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)} || ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}`;
 }
 
-function updateLessonProgress(lessonKey) {
-  const keysBySection = allKeysBySection(lessonKey);
-  const trBadge = progressBySection(keysBySection, TRANSLATION_SEC);
-  const respBadge = progressBySection(keysBySection, RESPONSE_SEC);
-
-  const trEl = document.getElementById(_sectionProgressID(lessonKey, TRANSLATION_SEC));
-  const respEl = document.getElementById(_sectionProgressID(lessonKey, RESPONSE_SEC));
-
-  trEl.innerHTML = trBadge;
-  respEl.innerHTML = respBadge;
-}
-
 function router() {
   const hash = window.location.hash || '#/';
   if (hash.startsWith('#/lesson/')) {
-    state.lessonKey = hash.replace('#/lesson/', '') 
+    state.lessonKey = hash.replace('#/lesson/', '')
     renderLessonView(state.lessonKey);
   } else {
     renderIndexView();
