@@ -24,7 +24,6 @@ const state = {
     customEndpoint: '',
     selectedModel: '',
     furiganaEnabled: false,
-    thinkingEnabled: false,
   },
   answeredItems: new Set(),
   // In-memory only!
@@ -146,8 +145,7 @@ const adapters = {
       const data = await res.json();
       return (data.data || []).map(m => m.id).sort();
     },
-    async *streamChat(config, apiKey, messages, signal) {
-      const { customEndpoint, selectedModel } = config;
+    async *streamChat({ customEndpoint, selectedModel }, apiKey, messages, signal) {
       const url = `${customEndpoint || 'https://api.openai.com'}/v1/chat/completions`;
       const res = await fetch(url, {
         method: 'POST',
@@ -160,6 +158,7 @@ const adapters = {
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
 
+        // Captures intrinsic reasoning (DeepSeek-R1, Groq, Ollama, OpenRouter)
         const thinking = delta.reasoning_content || delta.reasoning;
         if (thinking) yield { type: 'thinking', delta: thinking };
         if (delta.content) yield { type: 'text', delta: delta.content };
@@ -176,8 +175,7 @@ const adapters = {
       const data = await res.json();
       return (data.data || []).map(m => m.id).sort();
     },
-    async *streamChat(config, apiKey, messages, signal) {
-      const { selectedModel, thinkingEnabled } = config;
+    async *streamChat({ selectedModel }, apiKey, messages, signal) {
       const systemMsg = messages.find(m => m.role === 'system')?.content || '';
       const convMessages = messages.filter(m => m.role !== 'system');
 
@@ -192,12 +190,9 @@ const adapters = {
         body: JSON.stringify({
           model: selectedModel,
           stream: true,
-          max_tokens: thinkingEnabled ? 4096 : 1024,
+          max_tokens: 4096,
           system: systemMsg,
           messages: convMessages,
-          ...(thinkingEnabled && {
-            thinking: { type: 'enabled', budget_tokens: 2048 },
-          }),
         }),
         signal,
       });
@@ -224,8 +219,7 @@ const adapters = {
         .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
         .map(m => m.name.replace('models/', ''));
     },
-    async *streamChat(config, apiKey, messages, signal) {
-      const { selectedModel, thinkingEnabled } = config;
+    async *streamChat({ selectedModel }, apiKey, messages, signal) {
       const contents = messages.filter(m => m.role !== 'system').map(m => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
@@ -238,11 +232,6 @@ const adapters = {
         body: JSON.stringify({
           contents,
           ...(systemPrompt && { systemInstruction: { parts: [{ text: systemPrompt }] } }),
-          ...(thinkingEnabled && {
-            generationConfig: {
-              thinkingConfig: { thinkingBudget: 2048 },
-            },
-          }),
         }),
         signal,
       });
@@ -251,6 +240,7 @@ const adapters = {
         const parts = chunk.candidates?.[0]?.content?.parts || [];
         for (const part of parts) {
           if (!part.text) continue;
+          // Captures intrinsic thoughts (e.g. Gemini 2.0 Flash Thinking models)
           yield { type: part.thought ? 'thinking' : 'text', delta: part.text };
         }
       }
@@ -636,7 +626,6 @@ function updateLessonProgress(lessonKey) {
 }
 
 // TODO:
-// better thinking parser
 // exponential back off retries
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
@@ -702,7 +691,6 @@ function bindConfigUI() {
   const keyForm = document.getElementById('cfg-key-form');
   const modelEl = document.getElementById('cfg-model');
   const furiganaEl = document.getElementById('cfg-furigana');
-  const thinkingEl = document.getElementById('cfg-thinking');
   const fetchBtn = document.getElementById('cfg-fetch-models-btn');
 
   providerEl.value = state.config.provider;
@@ -713,14 +701,6 @@ function bindConfigUI() {
 
   const toggleEndpoint = () => endpointEl.classList.toggle('hidden', providerEl.value !== 'Custom');
   toggleEndpoint();
-
-  if (thinkingEl) {
-    thinkingEl.checked = state.config.thinkingEnabled;
-    thinkingEl.addEventListener('change', () => {
-      state.config.thinkingEnabled = thinkingEl.checked;
-      saveConfig();
-    });
-  }
 
   providerEl.addEventListener('change', () => {
     state.config.provider = providerEl.value;
