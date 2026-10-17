@@ -592,6 +592,7 @@ function updateLessonProgress(lessonKey) {
 
 // TODO:
 // Then make certain buttons not tab-able
+// make models only populate on fetch: then the select defaults to the saved selected model
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
   return `${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)} || ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}`;
@@ -649,27 +650,32 @@ function bindConfigUI() {
   const providerEl = document.getElementById('cfg-provider');
   const endpointEl = document.getElementById('cfg-endpoint');
   const keyEl = document.getElementById('cfg-key');
+  const usernameEl = document.getElementById('cfg-username');
+  const keyForm = document.getElementById('cfg-key-form');
   const modelEl = document.getElementById('cfg-model');
   const furiganaEl = document.getElementById('cfg-furigana');
   const fetchBtn = document.getElementById('cfg-fetch-models-btn');
 
   providerEl.value = state.config.provider;
   endpointEl.value = state.config.customEndpoint;
+  if (usernameEl) usernameEl.value = state.config.provider;
   furiganaEl.checked = state.config.furiganaEnabled;
   document.body.classList.toggle('hide-furigana', !state.config.furiganaEnabled);
 
   const toggleEndpoint = () => endpointEl.classList.toggle('hidden', providerEl.value !== 'Custom');
   toggleEndpoint();
 
-  if (state.config.selectedModel) {
-    modelEl.innerHTML = `<option value="${state.config.selectedModel}">${state.config.selectedModel}</option>`;
-  }
 
   providerEl.addEventListener('change', () => {
     state.config.provider = providerEl.value;
+    if (usernameEl) usernameEl.value = providerEl.value; // Syncs credential label in Google Password Manager
     toggleEndpoint();
     saveConfig();
-    if (state.apiKey) fetchModels();
+
+    // Reset key state on provider change so keys aren't mixed between providers
+    state.apiKey = '';
+    keyEl.value = '';
+    modelEl.innerHTML = '<option value="">Select or fetch model...</option>';
   });
 
   endpointEl.addEventListener('input', () => {
@@ -677,13 +683,14 @@ function bindConfigUI() {
     saveConfig();
   });
 
-  keyEl.addEventListener('input', () => {
-    state.apiKey = keyEl.value;
-  });
+  // Handle explicit submission (triggers the password manager prompt and fetches models)
+  keyForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const key = keyEl.value.trim();
+    if (!key) return;
 
-  // fetch models automatically after 1 second of inputting API key
-  keyEl.addEventListener('blur', () => {
-    if (state.apiKey && modelEl.options.length <= 1) fetchModels();
+    state.apiKey = key;
+    fetchModels();
   });
 
   modelEl.addEventListener('change', () => {

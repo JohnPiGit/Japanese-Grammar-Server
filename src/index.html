@@ -1,49 +1,62 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Japanese Grammar Study</title>
-  <!-- increment this the number after v for cache busting -->
-  <link rel="stylesheet" href="style.css?v=4">
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Japanese Grammar Study</title>
+    <!-- increment this the number after v for cache busting -->
+    <link rel="stylesheet" href="style.css?v=4">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/dompurify.min.js"></script>
 </head>
+
 <body>
-  <header id="top-bar">
-    <div class="brand progress-ratio-btn"><a href="#/">日本語文法</a></div>
-    <div id="config-box" class="config-box">
-      <div class="config-row">
-        <label class="toggle-label">
-          <input type="checkbox" id="cfg-furigana">
-          <span>振仮名 (Furigana)</span>
-        </label>
-        <select id="cfg-provider" aria-label="LLM Provider">
-          <option value="OpenAI">OpenAI</option>
-          <option value="Anthropic">Anthropic</option>
-          <option value="Gemini">Gemini</option>
-          <option value="Custom">Custom (OpenAI-Compatible)</option>
-        </select>
-      </div>
+    <header id="top-bar">
+        <div class="brand progress-ratio-btn"><a href="#/">日本語文法</a></div>
+        <div id="config-box" class="config-box">
+            <div class="config-row">
+                <label class="toggle-label">
+                    <input type="checkbox" id="cfg-furigana">
+                    <span>振仮名 (Furigana)</span>
+                </label>
+                <select id="cfg-provider" aria-label="LLM Provider">
+                    <option value="OpenAI">OpenAI</option>
+                    <option value="Anthropic">Anthropic</option>
+                    <option value="Gemini">Gemini</option>
+                    <option value="Custom">Custom (OpenAI-Compatible)</option>
+                </select>
+            </div>
 
-      <div class="config-row">
-        <input type="text" id="cfg-endpoint" placeholder="Endpoint: https://api.example.com" class="hidden">
-        <input type="password" id="cfg-key" placeholder="API Key (in-memory only)" autocomplete="off">
-      </div>
+            <div class="config-row">
+                <input type="text" id="cfg-endpoint" placeholder="Endpoint: https://api.example.com" class="hidden">
 
-      <div class="config-row">
-        <select id="cfg-model" aria-label="Model Selection">
-          <option value="">Select or fetch model...</option>
-        </select>
-        <button type="button" id="cfg-fetch-models-btn" class="btn btn-secondary">Fetch Models</button>
-      </div>
-    </div>
-  </header>
+                <form id="cfg-key-form" class="key-form" style="display: flex; gap: 0.5rem; flex: 1;">
+                    <!-- Hidden username field dynamically set to the provider name for password managers -->
+                    <input type="text" id="cfg-username" name="username" autocomplete="username" value="OpenAI"
+                        style="display: none;" tabindex="-1">
 
-  <main id="app" class="container"></main>
+                    <input type="password" id="cfg-key" name="password" placeholder="API Key"
+                        autocomplete="current-password" required>
+                    <button type="submit" class="btn btn-secondary">Save &amp; Fetch</button>
+                </form>
+            </div>
 
-  <div id="toast" class="toast hidden" role="alert"></div>
+            <div class="config-row">
+                <select id="cfg-model" aria-label="Model Selection">
+                    <option value="">Select or fetch model...</option>
+                </select>
+                <button type="button" id="cfg-fetch-models-btn" class="btn btn-secondary">Fetch Models</button>
+            </div>
+        </div>
+    </header>
 
-  <script src="prompts.js"></script>
-  <script src="app.js"></script>
+    <main id="app" class="container"></main>
+
+    <div id="toast" class="toast hidden" role="alert"></div>
+
+    <script src="prompts.js"></script>
+    <script src="app.js"></script>
 </body>
+
 </html>
