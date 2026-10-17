@@ -641,21 +641,14 @@ function populateModelSelect(models) {
   const select = document.getElementById('cfg-model');
   const savedModel = state.config.selectedModel;
 
-  // Include the saved model in the list if it's not present so it isn't lost
-  const modelOptions = savedModel && !models.includes(savedModel)
-    ? [savedModel, ...models]
-    : models;
-
   select.innerHTML = '<option value="">Select a model...</option>' +
-    modelOptions.map(m => `<option value="${m}">${m}</option>`).join('');
+    models.map(m => `<option value="${m}">${m}</option>`).join('');
 
-  if (savedModel && modelOptions.includes(savedModel)) {
+  if (savedModel && models.includes(savedModel)) {
     select.value = savedModel;
-  } else if (!savedModel && models.length > 0) {
-    // Only auto-select the first model if there was no saved model previously
+  } else if (models.length > 0) {
     select.value = models[0];
     state.config.selectedModel = models[0];
-    saveConfig();
   }
 }
 
