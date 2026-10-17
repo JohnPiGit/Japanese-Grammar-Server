@@ -134,20 +134,113 @@ async function* parseSSE(response) {
 }
 
 /* ==========================================================================
+   Retry & Network Utilities
+   ========================================================================== */
+
+/**
+ * Abort-aware delay helper.
+ */
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => {
+      clearTimeout(timer);
+      reject(new DOMException('Aborted', 'AbortError'));
+    }, { once: true });
+  });
+}
+
+/**
+ * Wraps window.fetch with exponential backoff and jitter.
+ * Automatically catches 429 (Rate Limit) and 5xx (Server) errors.
+ */
+async function fetchWithRetry(url, options = {}, {
+  maxRetries = 3,
+  initialDelay = 1000,
+  backoffFactor = 2,
+  maxDelay = 15000,
+} = {}) {
+  const signal = options.signal;
+  let attempt = 0;
+  let delay = initialDelay;
+
+  while (true) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    try {
+      const res = await fetch(url, options);
+
+      // Statuses that warrant a retry
+      const isRetryable = res.status === 429 || (res.status >= 500 && res.status <= 504);
+
+      if (!res.ok && isRetryable && attempt < maxRetries) {
+        attempt++;
+        let waitTime = delay;
+
+        // Honor standard Retry-After headers if provided by OpenAI / Anthropic
+        const retryAfter = res.headers.get('retry-after');
+        if (retryAfter) {
+          const seconds = Number(retryAfter);
+          if (!Number.isNaN(seconds)) {
+            waitTime = seconds * 1000;
+          } else {
+            const parsedDate = Date.parse(retryAfter);
+            if (!Number.isNaN(parsedDate)) {
+              waitTime = Math.max(0, parsedDate - Date.now());
+            }
+          }
+        } else {
+          // Exponential backoff with ±20% jitter
+          waitTime = Math.min(maxDelay, delay * (0.8 + 0.4 * Math.random()));
+          delay *= backoffFactor;
+        }
+
+        showToast(`Request busy (${res.status}). Retrying in ${(waitTime / 1000).toFixed(1)}s (attempt ${attempt}/${maxRetries})...`);
+        await sleep(waitTime, signal);
+        continue;
+      }
+
+      return res;
+    } catch (err) {
+      // Do not retry if cancelled intentionally by user
+      if (err.name === 'AbortError' || signal?.aborted) {
+        throw err;
+      }
+
+      // Retry on network disconnects / DNS dropouts
+      if (attempt < maxRetries) {
+        attempt++;
+        const waitTime = Math.min(maxDelay, delay * (0.8 + 0.4 * Math.random()));
+        delay *= backoffFactor;
+
+        showToast(`Network error. Retrying in ${(waitTime / 1000).toFixed(1)}s (attempt ${attempt}/${maxRetries})...`);
+        await sleep(waitTime, signal);
+        continue;
+      }
+
+      throw err;
+    }
+  }
+}
+
+/* ==========================================================================
    Multi-Provider LLM Adapters
    ========================================================================== */
 const adapters = {
   OpenAI: {
     async listModels({ customEndpoint }, apiKey) {
       const url = `${customEndpoint || 'https://api.openai.com'}/v1/models`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+      const res = await fetchWithRetry(url, { headers: { Authorization: `Bearer ${apiKey}` } });
       if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
       const data = await res.json();
       return (data.data || []).map(m => m.id).sort();
     },
     async *streamChat({ customEndpoint, selectedModel }, apiKey, messages, signal) {
       const url = `${customEndpoint || 'https://api.openai.com'}/v1/chat/completions`;
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model: selectedModel, stream: true, messages }),
@@ -158,7 +251,6 @@ const adapters = {
         const delta = chunk.choices?.[0]?.delta;
         if (!delta) continue;
 
-        // Captures intrinsic reasoning (DeepSeek-R1, Groq, Ollama, OpenRouter)
         const thinking = delta.reasoning_content || delta.reasoning;
         if (thinking) yield { type: 'thinking', delta: thinking };
         if (delta.content) yield { type: 'text', delta: delta.content };
@@ -168,7 +260,7 @@ const adapters = {
 
   Anthropic: {
     async listModels(_, apiKey) {
-      const res = await fetch('https://api.anthropic.com/v1/models', {
+      const res = await fetchWithRetry('https://api.anthropic.com/v1/models', {
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       });
       if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
@@ -179,7 +271,7 @@ const adapters = {
       const systemMsg = messages.find(m => m.role === 'system')?.content || '';
       const convMessages = messages.filter(m => m.role !== 'system');
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetchWithRetry('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': apiKey,
@@ -212,7 +304,7 @@ const adapters = {
 
   Gemini: {
     async listModels(_, apiKey) {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      const res = await fetchWithRetry(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
       const data = await res.json();
       return (data.models || [])
@@ -226,7 +318,7 @@ const adapters = {
       }));
       const systemPrompt = messages.find(m => m.role === 'system')?.content;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${selectedModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
-      const res = await fetch(url, {
+      const res = await fetchWithRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -240,7 +332,6 @@ const adapters = {
         const parts = chunk.candidates?.[0]?.content?.parts || [];
         for (const part of parts) {
           if (!part.text) continue;
-          // Captures intrinsic thoughts (e.g. Gemini 2.0 Flash Thinking models)
           yield { type: part.thought ? 'thinking' : 'text', delta: part.text };
         }
       }
@@ -625,8 +716,6 @@ function updateLessonProgress(lessonKey) {
   if (respEl) respEl.innerHTML = respBadge;
 }
 
-// TODO:
-// exponential back off retries
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
   return `${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)} || ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}`;
