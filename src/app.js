@@ -113,6 +113,7 @@ const adapters = {
     async listModels({ customEndpoint }, apiKey) {
       const url = `${customEndpoint || 'https://api.openai.com'}/v1/models`;
       const res = await fetch(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+      if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
       const data = await res.json();
       return (data.data || []).map(m => m.id).sort();
     },
@@ -137,6 +138,7 @@ const adapters = {
       const res = await fetch('https://api.anthropic.com/v1/models', {
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
       });
+      if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
       const data = await res.json();
       return (data.data || []).map(m => m.id).sort();
     },
@@ -165,6 +167,7 @@ const adapters = {
   Gemini: {
     async listModels(_, apiKey) {
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+      if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
       const data = await res.json();
       return (data.models || [])
         .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
@@ -633,13 +636,23 @@ async function fetchModels() {
 }
 
 function populateModelSelect(models) {
-  const select = document.getElementById('cfg-model');
-  select.innerHTML = '<option value="">Select a model...</option>' +
-    models.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (!models || models.length === 0) return;
 
-  if (models.includes(state.config.selectedModel)) {
-    select.value = state.config.selectedModel;
-  } else if (models.length > 0) {
+  const select = document.getElementById('cfg-model');
+  const savedModel = state.config.selectedModel;
+
+  // Include the saved model in the list if it's not present so it isn't lost
+  const modelOptions = savedModel && !models.includes(savedModel)
+    ? [savedModel, ...models]
+    : models;
+
+  select.innerHTML = '<option value="">Select a model...</option>' +
+    modelOptions.map(m => `<option value="${m}">${m}</option>`).join('');
+
+  if (savedModel && modelOptions.includes(savedModel)) {
+    select.value = savedModel;
+  } else if (!savedModel && models.length > 0) {
+    // Only auto-select the first model if there was no saved model previously
     select.value = models[0];
     state.config.selectedModel = models[0];
     saveConfig();
