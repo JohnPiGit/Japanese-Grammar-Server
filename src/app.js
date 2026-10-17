@@ -371,7 +371,7 @@ function updateStreamingUI(itemKey, text) {
   if (thinking) {
     html += `<details open class="thinking-block"><summary>Reasoning</summary><div>${escapeHtml(thinking)}</div></details>`;
   }
-  html += `<div>${marked.parse(content || '...')}</div>`;
+  html += `<div>${DOMPurify.sanitize(marked.parse(content || '...'))}</div>`;
   container.innerHTML = html;
 }
 
@@ -388,7 +388,7 @@ function renderHistory(itemKey) {
     return `
       <div class="chat-msg assistant">
         ${thinking ? `<details class="thinking-block"><summary>Reasoning</summary><div>${escapeHtml(thinking)}</div></details>` : ''}
-        <div>${marked.parse(content)}</div>
+        <div>${DOMPurify.sanitize(marked.parse(content))}</div>
       </div>`;
   }).join('') + `<div id="live-reply-${itemKey}"></div>`;
 }
@@ -450,7 +450,7 @@ function renderLessonView(lessonKey) {
     <article>
       <h1 class="lesson-title">${lesson.Lesson}</h1>
       <section class="explanation-box">
-        ${marked.parse(lesson.Explanation || '')}
+        <section class="explanation-box">${DOMPurify.sanitize(marked.parse(lesson.Explanation || ''))}</section>
         ${renderSubmissionDiv(getKey(LESSON_SEC, 0), lessonPlaceholder)}
       </section>
 
