@@ -24,6 +24,7 @@ const state = {
     customEndpoint: '',
     selectedModel: '',
     furiganaEnabled: false,
+    thinkingEnabled: false,
   },
   answeredItems: new Set(),
   // In-memory only!
@@ -106,6 +107,34 @@ function isLLMSet() {
 }
 
 /* ==========================================================================
+   SSE Utility
+   ========================================================================== */
+async function* parseSSE(response) {
+  if (!response.ok) throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data: ') || trimmed.includes('[DONE]')) continue;
+      try {
+        yield JSON.parse(trimmed.slice(6));
+      } catch {
+        // Discard keep-alives or non-JSON payloads
+      }
+    }
+  }
+}
+
+/* ==========================================================================
    Multi-Provider LLM Adapters
    ========================================================================== */
 const adapters = {
@@ -117,7 +146,8 @@ const adapters = {
       const data = await res.json();
       return (data.data || []).map(m => m.id).sort();
     },
-    async streamChat({ customEndpoint, selectedModel }, apiKey, messages, onChunk, signal) {
+    async *streamChat(config, apiKey, messages, signal) {
+      const { customEndpoint, selectedModel } = config;
       const url = `${customEndpoint || 'https://api.openai.com'}/v1/chat/completions`;
       const res = await fetch(url, {
         method: 'POST',
@@ -125,11 +155,15 @@ const adapters = {
         body: JSON.stringify({ model: selectedModel, stream: true, messages }),
         signal,
       });
-      return readSSE(res, line => {
-        if (!line.startsWith('data: ') || line.includes('[DONE]')) return;
-        const json = JSON.parse(line.slice(6));
-        onChunk(json.choices?.[0]?.delta?.content || '');
-      });
+
+      for await (const chunk of parseSSE(res)) {
+        const delta = chunk.choices?.[0]?.delta;
+        if (!delta) continue;
+
+        const thinking = delta.reasoning_content || delta.reasoning;
+        if (thinking) yield { type: 'thinking', delta: thinking };
+        if (delta.content) yield { type: 'text', delta: delta.content };
+      }
     },
   },
 
@@ -142,9 +176,11 @@ const adapters = {
       const data = await res.json();
       return (data.data || []).map(m => m.id).sort();
     },
-    async streamChat({ selectedModel }, apiKey, messages, onChunk, signal) {
+    async *streamChat(config, apiKey, messages, signal) {
+      const { selectedModel, thinkingEnabled } = config;
       const systemMsg = messages.find(m => m.role === 'system')?.content || '';
       const convMessages = messages.filter(m => m.role !== 'system');
+
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -153,14 +189,29 @@ const adapters = {
           'anthropic-dangerous-direct-browser-access': 'true',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model: selectedModel, stream: true, max_tokens: 1024, system: systemMsg, messages: convMessages }),
+        body: JSON.stringify({
+          model: selectedModel,
+          stream: true,
+          max_tokens: thinkingEnabled ? 4096 : 1024,
+          system: systemMsg,
+          messages: convMessages,
+          ...(thinkingEnabled && {
+            thinking: { type: 'enabled', budget_tokens: 2048 },
+          }),
+        }),
         signal,
       });
-      return readSSE(res, line => {
-        if (!line.startsWith('data: ')) return;
-        const json = JSON.parse(line.slice(6));
-        if (json.type === 'content_block_delta') onChunk(json.delta?.text || '');
-      });
+
+      for await (const chunk of parseSSE(res)) {
+        if (chunk.type !== 'content_block_delta') continue;
+        const { delta } = chunk;
+
+        if (delta?.type === 'thinking_delta' && delta.thinking) {
+          yield { type: 'thinking', delta: delta.thinking };
+        } else if (delta?.type === 'text_delta' && delta.text) {
+          yield { type: 'text', delta: delta.text };
+        }
+      }
     },
   },
 
@@ -173,7 +224,8 @@ const adapters = {
         .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
         .map(m => m.name.replace('models/', ''));
     },
-    async streamChat({ selectedModel }, apiKey, messages, onChunk, signal) {
+    async *streamChat(config, apiKey, messages, signal) {
+      const { selectedModel, thinkingEnabled } = config;
       const contents = messages.filter(m => m.role !== 'system').map(m => ({
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: m.content }],
@@ -186,38 +238,27 @@ const adapters = {
         body: JSON.stringify({
           contents,
           ...(systemPrompt && { systemInstruction: { parts: [{ text: systemPrompt }] } }),
+          ...(thinkingEnabled && {
+            generationConfig: {
+              thinkingConfig: { thinkingBudget: 2048 },
+            },
+          }),
         }),
         signal,
       });
-      return readSSE(res, line => {
-        if (!line.startsWith('data: ')) return;
-        const json = JSON.parse(line.slice(6));
-        onChunk(json.candidates?.[0]?.content?.parts?.[0]?.text || '');
-      });
+
+      for await (const chunk of parseSSE(res)) {
+        const parts = chunk.candidates?.[0]?.content?.parts || [];
+        for (const part of parts) {
+          if (!part.text) continue;
+          yield { type: part.thought ? 'thinking' : 'text', delta: part.text };
+        }
+      }
     },
   },
 };
 
-// Custom provider reuses OpenAI API structure
 adapters.Custom = adapters.OpenAI;
-
-async function readSSE(response, onLine) {
-  if (!response.ok) throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-    for (const line of lines) {
-      if (line.trim()) onLine(line.trim());
-    }
-  }
-}
 
 /* ==========================================================================
    Prompt Formatting
@@ -269,12 +310,6 @@ function formatPracticeRespondPrompt(item) {
 /* ==========================================================================
    Submission, Streaming & UI Interactions
    ========================================================================== */
-function parseThinkingBlocks(rawText) {
-  const thinkMatch = rawText.match(/<think>([\s\S]*?)(?:<\/think>|$)/i);
-  const thinking = thinkMatch ? thinkMatch[1].trim() : '';
-  const content = rawText.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '').trim();
-  return { thinking, content };
-}
 
 // toast is the pop-up message that fades away after a short time. Just like your toast melts back into the toaster if you're not quick enough
 function showToast(message) {
@@ -310,34 +345,41 @@ async function handleSubmission(itemKey) {
   state.chatHistories.set(itemKey, history);
 
   renderHistory(itemKey);
+  const historyEl = document.getElementById(`history-${itemKey}`);
+  historyEl.scrollTop = historyEl.scrollHeight;
   await executeStreamingChat(itemKey, systemPrompt);
 }
 
+/* ==========================================================================
+   Streaming & History Management
+   ========================================================================== */
 async function executeStreamingChat(itemKey, systemPrompt) {
   const adapter = adapters[state.config.provider];
-  const history = state.chatHistories.get(itemKey);
-  const messages = [{ role: 'system', content: systemPrompt }, ...history];
+  const history = state.chatHistories.get(itemKey) || [];
+
+  // Exclude thinking from past context when submitting to the LLM
+  const apiMessages = [
+    { role: 'system', content: systemPrompt },
+    ...history.map(({ role, content }) => ({ role, content })),
+  ];
 
   const controller = new AbortController();
   state.activeControllers.set(itemKey, controller);
   toggleSubmissionState(itemKey, true);
 
-  let fullResponse = '';
+  const assistantMessage = { role: 'assistant', content: '', thinking: '' };
+  const historyEl = document.getElementById(`history-${itemKey}`);
+
   try {
-    // start streaming response. First, scroll to the bottom
-    const historyEl = document.getElementById(`history-${itemKey}`);
-    historyEl.scrollTop = historyEl.scrollHeight;
-    await adapter.streamChat(
-      state.config,
-      state.apiKey,
-      messages,
-      chunk => {
-        fullResponse += chunk;
-        updateStreamingUIWithAutoScroll(historyEl, itemKey, fullResponse);
-      },
-      controller.signal
-    );
-    history.push({ role: 'assistant', content: fullResponse });
+    for await (const chunk of adapter.streamChat(state.config, state.apiKey, apiMessages, controller.signal)) {
+      if (chunk.type === 'thinking') {
+        assistantMessage.thinking += chunk.delta;
+      } else {
+        assistantMessage.content += chunk.delta;
+      }
+      updateStreamingUIWithAutoScroll(historyEl, itemKey, assistantMessage);
+    }
+    history.push(assistantMessage);
   } catch (err) {
     if (err.name !== 'AbortError') {
       showToast(`Stream error: ${err.message}`);
@@ -349,30 +391,31 @@ async function executeStreamingChat(itemKey, systemPrompt) {
   }
 }
 
-function updateStreamingUIWithAutoScroll(historyEl, itemKey, text) {
-  const threshold = 50; // Distance in pixels from bottom considered "at the bottom"
+function updateStreamingUIWithAutoScroll(historyEl, itemKey, message) {
+  const threshold = 50;
   const prevHeight = historyEl.scrollHeight;
   const isAtBottom = prevHeight - historyEl.scrollTop - historyEl.clientHeight <= threshold;
 
-  updateStreamingUI(itemKey, text);
+  updateStreamingUI(itemKey, message);
 
-  // Only scroll if the box expanded AND you were already at the bottom
   if (historyEl.scrollHeight !== prevHeight && isAtBottom) {
     historyEl.scrollTop = historyEl.scrollHeight;
   }
 }
 
-function updateStreamingUI(itemKey, text) {
+function updateStreamingUI(itemKey, { thinking, content }) {
   const container = document.getElementById(`live-reply-${itemKey}`);
   if (!container) return;
-  const { thinking, content } = parseThinkingBlocks(text);
 
-  let html = '';
-  if (thinking) {
-    html += `<details open class="thinking-block"><summary>Reasoning</summary><div>${escapeHtml(thinking)}</div></details>`;
-  }
-  html += `<div>${DOMPurify.sanitize(marked.parse(content || '...'))}</div>`;
-  container.innerHTML = html;
+  const thinkingBlock = thinking
+    ? `<details open class="thinking-block"><summary>Reasoning</summary><div>${escapeHtml(thinking)}</div></details>`
+    : '';
+
+  const contentBlock = content
+    ? `<div>${DOMPurify.sanitize(marked.parse(content))}</div>`
+    : (thinking ? '' : '<div>...</div>');
+
+  container.innerHTML = thinkingBlock + contentBlock;
 }
 
 function renderHistory(itemKey) {
@@ -384,11 +427,10 @@ function renderHistory(itemKey) {
     if (msg.role === 'user') {
       return `<div class="chat-msg user">${escapeHtml(msg.content)}</div>`;
     }
-    const { thinking, content } = parseThinkingBlocks(msg.content);
     return `
       <div class="chat-msg assistant">
-        ${thinking ? `<details class="thinking-block"><summary>Reasoning</summary><div>${escapeHtml(thinking)}</div></details>` : ''}
-        <div>${DOMPurify.sanitize(marked.parse(content))}</div>
+        ${msg.thinking ? `<details class="thinking-block"><summary>Reasoning</summary><div>${escapeHtml(msg.thinking)}</div></details>` : ''}
+        <div>${DOMPurify.sanitize(marked.parse(msg.content || ''))}</div>
       </div>`;
   }).join('') + `<div id="live-reply-${itemKey}"></div>`;
 }
@@ -660,6 +702,7 @@ function bindConfigUI() {
   const keyForm = document.getElementById('cfg-key-form');
   const modelEl = document.getElementById('cfg-model');
   const furiganaEl = document.getElementById('cfg-furigana');
+  const thinkingEl = document.getElementById('cfg-thinking');
   const fetchBtn = document.getElementById('cfg-fetch-models-btn');
 
   providerEl.value = state.config.provider;
@@ -671,6 +714,13 @@ function bindConfigUI() {
   const toggleEndpoint = () => endpointEl.classList.toggle('hidden', providerEl.value !== 'Custom');
   toggleEndpoint();
 
+  if (thinkingEl) {
+    thinkingEl.checked = state.config.thinkingEnabled;
+    thinkingEl.addEventListener('change', () => {
+      state.config.thinkingEnabled = thinkingEl.checked;
+      saveConfig();
+    });
+  }
 
   providerEl.addEventListener('change', () => {
     state.config.provider = providerEl.value;
