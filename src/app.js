@@ -418,9 +418,9 @@ function renderSubmissionDiv(itemKey, placeholder) {
       <div class="submission-controls">
         <input type="text" id="input-${itemKey}" placeholder="${placeholder}"
                onkeydown="if(event.key==='Enter') handleSubmission('${itemKey}')">
-        <button id="submit-btn-${itemKey}" class="btn btn-primary" onclick="handleSubmission('${itemKey}')">Submit</button>
-        <button id="stop-btn-${itemKey}" class="btn btn-danger hidden" onclick="cancelStream('${itemKey}')">Stop</button>
-        <button class="btn btn-secondary" onclick="clearChat('${itemKey}')">Clear</button>
+        <button id="submit-btn-${itemKey}" class="btn btn-primary" tabindex="-1" onclick="handleSubmission('${itemKey}')">Submit</button>
+        <button id="stop-btn-${itemKey}" class="btn btn-danger hidden" tabindex="-1" onclick="cancelStream('${itemKey}')">Stop</button>
+        <button class="btn btn-secondary" tabindex="-1" onclick="clearChat('${itemKey}')">Clear</button>
       </div>
     </div>`;
 }
@@ -477,7 +477,7 @@ function renderLessonView(lessonKey) {
             ${makeCheckSpanButton(getKey(TRANSLATION_SEC, idx))}
             ${idx + 1}. ${item.English}
           </div>
-          <details id="details-${getKey(TRANSLATION_SEC, idx)}">
+          <details id="details-${getKey(TRANSLATION_SEC, idx)}" tabindex="-1">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
@@ -495,13 +495,13 @@ function renderLessonView(lessonKey) {
             ${makeCheckSpanButton(getKey(RESPONSE_SEC, idx))}
             ${idx + 1}. ${item['Respond-able statement']}
           </div>
-          <details id="context-details-${getKey(RESPONSE_SEC, idx)}">
+          <details id="context-details-${getKey(RESPONSE_SEC, idx)}" tabindex="-1">
             <summary>Context</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Context:</strong> ${item.Context}</div>
             </div>
           </details>
-          <details id="details-${getKey(RESPONSE_SEC, idx)}">
+          <details id="details-${getKey(RESPONSE_SEC, idx)}" tabindex="-1">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
@@ -561,7 +561,7 @@ function formatProgressRatio(current, total, lessonKey, section) {
     ? `onclick="toggleSectionProgress('${lessonKey}', '${section}')"`
     : '';
 
-  return `<button type="button" class="progress-ratio-btn ${statusClass}" title="${hint}" ${clickAttr}>(${current}/${total})</button>`;
+  return `<button type="button" class="progress-ratio-btn ${statusClass}" tabindex="-1" title="${hint}" ${clickAttr}>(${current}/${total})</button>`;
 }
 
 // a section is a key of SECTION_MAP (i.e. ls, ex, tr, resp)
@@ -594,8 +594,8 @@ function updateLessonProgress(lessonKey) {
 }
 
 // TODO:
-// Then make certain buttons not tab-able
-// make models only populate on fetch: then the select defaults to the saved selected model
+// better thinking parser
+// exponential back off retries
 function completedSentences(lessonKey) {
   const keysBySection = allKeysBySection(lessonKey);
   return `${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)} || ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}`;
