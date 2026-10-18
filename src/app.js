@@ -581,7 +581,7 @@ function renderLessonView(lessonKey) {
       <h2 class="section-title">例文 (Examples)</h2>
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => `
         <div class="item-card">
-          <div class="prompt-text">${item.Japanese}</div>
+          <div class="prompt-text">${idx+1}. ${item.Japanese}</div>
           <details id="details-${getKey(EXAMPLE_SEC, idx)}">
             <summary>Translation</summary>
             <div class="details-content">
@@ -593,7 +593,7 @@ function renderLessonView(lessonKey) {
         </div>
       `).join('')}
 
-      <h2 class="section-title">練習問題 (Translation Practice) ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
+      <h2 class="section-title">翻訳練習 (Translation Practice) ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
       ${(lesson['15 Practice Sentences'] || []).map((item, idx) => `
         <div class="item-card">
           <div class="prompt-text">
