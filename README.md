@@ -5,7 +5,7 @@ This is a prettied up version of a local webserver that I made and have been usi
 
 I __HIGHLY__ recommend using yomitan (https://yomitan.wiki/) - a pop-up dictionary browser extension - with this (or even just using yomitan at all!) as it make looking up words soo easy that it's not even a burden.
 
-All the lessons were generated using `gemini-3.8-flash` "grounded with google" from a list of hand-picked by me "grammar" topics (or really just things I wanted to study/practice) into a bunch of jsons that I format into "Lessons"
+All the lessons were generated using `Claude Sonnet 5.5` "grounded with google" from a list of hand-picked by me "grammar" topics (or really just things I wanted to study/practice) into a bunch of jsons that I format into "Lessons"
 
 ## Lesson Structure
 
@@ -59,15 +59,21 @@ Each is a sentence in __Japanese__, designed to elicit a response that could con
 The LLM grader prompt for this is pretty similar to the `Translation Practice`, but it also adds the context (but is again only told to treat it as a suggestion, rather than stifling your creative freedom)
 
 # Safety and Security Considerations
-TODO
+The main thing that could be of concern is "how is my API key handled?" It is simply stored in memory, which gets cleared away any time you refresh your browser or exit this page. It doesn't get stored locally, and it isn't sent anywhere other than the AI provider you have selected (selecting a different AI provider will clear your api key so that you can't accidentally sent it to the wrong place).
+
+In general, no information gets sent anywhere except the AI provider you have selected (and all they receive it your API key and bare-minimum prompts for answering the questions you asked). The Github server you reach out to when putting https://johnpigit.github.io/Japanese-Grammar-Server into the url is the html, java script, css, prompts, and lessons.json. No other http requests are made to Github beyond those initial ones, as the website utilizes hash-routing to keep everything in 1 browser session (that way you don't have to re-enter your api key for every new lesson page you click on)
+
+The form box you put your API key in is treated like a password field, and the AIProvider selected is treated like a username, so you can have google save your API key for you and have it saved by provider. (google's password saver is of course going to be way more secure than anything I can cobble together, and it's easier to use)
 
 ## Running Locally (mostly for debugging)
+- clone with `git clone https://github.com/JohnPiGit/Japanese-Grammar-Server.git`
 - In the project root (`.../Japanese-Grammar-Server/`)
-- in a python env (TODO: python env link here)
+- in a python env `python3 -m venv .my_venv`
 - `pip install requirements.txt` (or `uv pip install requirements.txt`, since uv 最高！)
 - build with `python3 build.py`
 - host/run local server with `python -m http.server 8000 -d dist`
 - reach at http://0.0.0.0:8000/
+- Any subsequent uses of this, you don't need to re-install anything, just re-activate your python environment with `source my_venv/bin/activate`
 
 ## Known issues and Work-Arounds
 - For a locally hosted endpoint (e.g. __Ollama__, __LM Studio__, __llama.cpp__), you'll need to enable CORS (Cross Origins something something) access (details not further elaborated - as in, look it up)
