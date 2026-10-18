@@ -1,5 +1,10 @@
 # Japanese-Grammar-Server
-Fully client-side website allowing you to use LLMs to grade pre-generated practice questions or answer questions related to the grammar topic.
+
+[![Live Demo](https://img.shields.io/badge/Demo-GitHub%20Pages-blue)](https://johnpigit.github.io/Japanese-Grammar-Server)
+
+A static client-side webs-app allowing you to use LLMs to grade pre-generated practice questions or answer questions related to the grammar topic.
+
+Hosted on github: https://johnpigit.github.io/Japanese-Grammar-Server
 
 You can provide an API key for one of the main AI providers (`OpenAI`, `Gemini`, or `Anthropic`) or use a custom endpoint (`OpenAI compatible`) to stream the LLM's response directly on the webpage.
 
@@ -28,9 +33,9 @@ Each lesson is about a "single" topic (or sometimes a comparison of 2 topics) an
 
 For the most part, I'm quite pleased with the quality of the explanation of each grammar topic, though there are certainly a few that are sub-par.
 
-For the practice sentences (wether it be the Examples, translation practice, or response practice), it is pretty hit or miss. However, my general experience/impression has been that the mere process of practicing outputting Japanese (speaking/writing/typing) has significantly increased my ability to output (quite the revelation) and therefore - even though some of the sentences are quite bad - I've found it much more useful than nothing. (though the difficulty level is not very consistent)
+For the practice sentences (whether it be the Examples, translation practice, or response practice), it is pretty hit or miss. However, my general experience/impression has been that the mere process of practicing outputting Japanese (speaking/writing/typing) has significantly increased my ability to output (quite the revelation) and therefore - even though some of the sentences can be meh - I've found it much more useful than nothing. (though the difficulty level is not very consistent)
 
-For the LLM-grading, this is where I've found the most value, because it gives immediate feedback on my mistakes, and more importantly allows me to ask follow-up questions for clarification or digging deeper into a concept (or for calling bs on it's response until one of us realizes the other is correct...). Of course, depending on the model you use it can be more or less wrong and you may need to independently verify it's feedback.
+For the LLM-grading, this is where I've found the most value, because it gives immediate feedback on my mistakes, and more importantly allows me to ask follow-up questions for clarification or digging deeper into a concept (or for calling bs on its response until one of us realizes the other is correct...). Of course, depending on the model you use it can be more or less wrong and you may need to independently verify its feedback.
 
 # Webpage Layout/Details
 
@@ -58,7 +63,7 @@ Each is a sentence in English that uses the grammar topic. You can translate it 
 - Intentionally does __NOT__ get the context of the grammar lesson. I didn't (and still don't) want the grader to potentially be poisoned or biased by the AI-generated Lesson
 - Has the reference answers as context, but is explicitly told that they have not been verified and to not take them at face value
 
-This allows for you to translate the sentence how ever you see fit and be graded on the correctness of your Japanese, rather than being tied down to a very specific interpretation and grammar choice.
+This allows for you to translate the sentence however you see fit and be graded on the correctness of your Japanese, rather than being tied down to a very specific interpretation and grammar choice.
 
 The LLM that generated the practice sentences was prompted to make them increase in difficulty from easy to medium (plateauing after 10 sentences), but it isn't perfect and some of the sentences can get really hard to translate.
 
@@ -70,9 +75,9 @@ Each is a sentence in __Japanese__, designed to elicit a response that could con
 The LLM grader prompt for this is pretty similar to the `Translation Practice`, but it also adds the context (but is again only told to treat it as a suggestion, rather than stifling your creative freedom)
 
 # Safety and Security Considerations
-The main thing that could be of concern is "how is my API key handled?" It is simply stored in memory, which gets cleared away any time you refresh your browser or exit this page. It doesn't get stored locally, and it isn't sent anywhere other than the AI provider you have selected (selecting a different AI provider will clear your api key so that you can't accidentally sent it to the wrong place).
+The main thing that could be of concern is "how is my API key handled?" It is simply stored in memory, which gets cleared away any time you refresh your browser or exit this page. It doesn't get stored locally, and it isn't sent anywhere other than the AI provider you have selected (selecting a different AI provider will clear your api key so that you can't accidentally send it to the wrong place).
 
-In general, no information gets sent anywhere except the AI provider you have selected (and all they receive is your API key and bare-minimum prompts for answering the questions you asked). The only thing the Github server sends when you put https://johnpigit.github.io/Japanese-Grammar-Server into the url, is the html, java script, css, prompts, and lessons.json. No other http requests are made to Github beyond those initial ones, as the website utilizes hash-routing to keep everything in 1 browser session (that way you don't have to re-enter your api key for every new lesson page you click on)
+In general, no information gets sent anywhere except the AI provider you have selected (and all they receive is your API key and bare-minimum prompts for answering the questions you asked). The only thing the Github server sends when you put https://johnpigit.github.io/Japanese-Grammar-Server into the url, is the html, JavaScript, css, prompts, and lessons.json. No other http requests are made to Github beyond those initial ones, as the website utilizes hash-routing to keep everything in 1 browser session (that way you don't have to re-enter your api key for every new lesson page you click on)
 
 The form box you put your API key in is treated like a password field, and the AIProvider selected is treated like a username, so you can have google save your API key for you and have it tied to the provider. (google's password saver is of course going to be way more secure than anything I can cobble together, and it's easier to use)
 
@@ -84,7 +89,7 @@ The form box you put your API key in is treated like a password field, and the A
 - clone with `git clone https://github.com/JohnPiGit/Japanese-Grammar-Server.git`
 - In the project root (`.../Japanese-Grammar-Server/`)
 - in a python env `python3 -m venv my_venv`
-- `pip install requirements.txt` (or `uv pip install requirements.txt`, since uv 最高！)
+- `pip install -r requirements.txt` (or `uv pip install -r requirements.txt`, since uv 最高！)
 - build with `python3 build.py`
 - host/run local server with `python -m http.server 8000 -d dist`
 - reach at http://0.0.0.0:8000/
