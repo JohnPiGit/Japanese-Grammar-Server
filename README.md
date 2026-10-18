@@ -97,3 +97,6 @@ The form box you put your API key in is treated like a password field, and the A
 
 ## Known issues and Work-Arounds
 - For a locally hosted endpoint (e.g. __Ollama__, __LM Studio__, __llama.cpp__), you'll need to enable CORS (Cross-Origin Resource Sharing) access (details not further elaborated - i.e. look it up for your specific host)
+
+## Creating your own lessons
+See [HERE](https://github.com/JohnPiGit/Grammar-Lesson-Maker). I didn't want to make something that would require paying for an AI subscription or having a really beefy GPU(s), so this is a quite manual method semi-automated with code. I don't think it quite deserves to be in this repo, but this is the exact code I use to generate the lessons for this repo
