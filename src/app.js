@@ -17,6 +17,9 @@ const SECTION_MAP = {
   resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
 };
 
+// Other constants (i'm kinda inconsistent)
+const INPUT_PREFIX = 'input-';
+
 
 const state = {
   config: {
@@ -405,7 +408,7 @@ async function handleSubmission(itemKey) {
   // first, open details dropdown to reveal answer and mark the answer as "answered"
   openDetails(itemKey);
   markItemAnswered(itemKey);
-  const inputEl = document.getElementById(`input-${itemKey}`);
+  const inputEl = document.getElementById(INPUT_PREFIX+itemKey);
   const userText = inputEl.value.trim();
   if (!userText) return;
 
@@ -539,7 +542,7 @@ function renderSubmissionDiv(itemKey, placeholder) {
     <div class="submission-container">
       <div id="history-${itemKey}" class="chat-history"></div>
       <div class="submission-controls">
-        <input type="text" id="input-${itemKey}" placeholder="${placeholder}"
+        <input type="text" id="${INPUT_PREFIX}${itemKey}" placeholder="${placeholder}"
                onkeydown="if(event.key==='Enter') handleSubmission('${itemKey}')">
         <button id="submit-btn-${itemKey}" class="btn btn-primary" tabindex="-1" onclick="handleSubmission('${itemKey}')">Submit</button>
         <button id="stop-btn-${itemKey}" class="btn btn-danger hidden" tabindex="-1" onclick="cancelStream('${itemKey}')">Stop</button>
@@ -772,6 +775,29 @@ function populateModelSelect(models) {
   }
 }
 
+function handleGlobalKeydown(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+    const activeEl = document.activeElement;
+
+    // Check if the user is currently inside an input box for an item
+    const isItemInput = activeEl?.id?.startsWith(INPUT_PREFIX);
+    if (!isItemInput) return;
+
+    // If they have selected text inside the input, let native copy work
+    if (activeEl.selectionStart !== activeEl.selectionEnd) return;
+
+    // Extract the itemKey
+    const itemKey = activeEl.id.slice(INPUT_PREFIX.length);
+
+    // Only cancel if this specific item is actually streaming
+    if (state.activeControllers.has(itemKey)) {
+      e.preventDefault();
+      cancelStream(itemKey);
+      showToast('Streaming stopped');
+    }
+  }
+}
+
 function bindConfigUI() {
   const providerEl = document.getElementById('cfg-provider');
   const endpointEl = document.getElementById('cfg-endpoint');
@@ -950,6 +976,7 @@ async function init() {
   }
 
   window.addEventListener('hashchange', router);
+  window.addEventListener('keydown', handleGlobalKeydown);
   router();
 }
 

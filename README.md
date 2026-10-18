@@ -1,5 +1,3 @@
-[toc]
-
 # Japanese-Grammar-Server
 Fully client-side website allowing you to use LLMs to grade pre-generated practice questions or answer questions related to the grammar topic. You can provide an API key for one of the main AI providers (`OpenAI`, `Gemini`, or `Anthropic`) or use a custom endpoint (`OpenAI compatible`) to stream the LLM's response directly on the webpage. If you don't, then pressing the submit button for any time you would usually make an LLM call, will instead format the prompt's sent to the LLM into 1 prompt, and copy it to your clipboard for you to paste into any __Free__ AI service of your choice (and can ask follow-up questions as you like)!
 
@@ -7,7 +5,7 @@ This is a prettied up version of a local webserver that I made and have been usi
 
 I __HIGHLY__ recommend using yomitan (https://yomitan.wiki/) - a pop-up dictionary browser extension - with this (or even just using yomitan at all!) as it make looking up words soo easy that it's not even a burden.
 
-All the lessons were generated using `gemini-3.8-flash` "grounded with google" from a list of hand-picked by me "grammar" topics (or really just things I wanted to study/practice) into a bunch of jsons that I format into a "Lesson"
+All the lessons were generated using `gemini-3.8-flash` "grounded with google" from a list of hand-picked by me "grammar" topics (or really just things I wanted to study/practice) into a bunch of jsons that I format into "Lessons"
 
 ## Lesson Structure
 
