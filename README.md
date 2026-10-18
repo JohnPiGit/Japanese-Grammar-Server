@@ -12,14 +12,14 @@ If you don't set up any providers, then pressing the submit button to submit an 
 
 This is a prettied up version of a local webserver that I made and have been using for the last ~5 months to study Japanese grammar. I found my local/private version to be extremely helpful in learning and understanding Japanese grammar, so I figured it would be worth it to spiff it up and make it public (and hopefully someone else can find value in it).
 
-I __HIGHLY__ recommend using [yomitan](https://yomitan.wiki/) - a pop-up dictionary browser extension - with this (or even just using yomitan at all!) as it make looking up words soo easy.
+I __HIGHLY__ recommend using [Yomitan](https://yomitan.wiki/) - a pop-up dictionary browser extension - with this (or even just using Yomitan at all!) as it make looking up words soo easy.
 
 All the lessons were generated using `Claude Sonnet 5.5` "grounded with internet searches" from a list of hand-picked by me "grammar" topics (or really just things I wanted to study/practice) into a bunch of jsons that I format into "Lessons"
 
 ## Who is this for?
 Someone at a somewhat low-mid level of Japanese. I think it minimally requires you to be comfortable reading hiragana and having a fair basis of words learned. Though I imagine just going through some of the easier grammar topics and doing the first few translation practice sentences is plenty doable for more beginner-level learners
 
-The 5 months ago when I started using this, I was at about 2.3 years of studying Japanese at 1 hour a day using only [Anki](https://apps.ankiweb.net/) (I __HIGHLY__ recommend this for learning Vocabulary. It also improves your listening and reading of Kanji along the way for free, and your pronunciation if you pay attention to it) and having read through [Tae Kim's Guide to Learning Japanese](https://guidetojapanese.org/learn/) ..., so 0 grammar practice beyond reading examples, but enough words under my belt that I can generally read most of the Japanese in these "lessons" without using yomitan.
+The 5 months ago when I started using this, I was at about 2.3 years of studying Japanese at 1 hour a day using only [Anki](https://apps.ankiweb.net/) (I __HIGHLY__ recommend this for learning Vocabulary. It also improves your listening and reading of Kanji along the way for free, and your pronunciation if you pay attention to it) and having read through [Tae Kim's Guide to Learning Japanese](https://guidetojapanese.org/learn/) ..., so 0 grammar practice beyond reading examples, but enough words under my belt that I can generally read most of the Japanese in these "lessons" without using Yomitan.
 
 ## Lesson Structure
 
@@ -40,7 +40,7 @@ For the LLM-grading, this is where I've found the most value, because it gives i
 # Webpage Layout/Details
 
 ## Config
-At the top of every page is a config section for setting up your Provider, API-key and model. There is also a furigana (a.k.a Ruby) toggle button that will put the hiragana readings above all the kanji (though it's automatically generated using `pykakasi` and is incorrect more often then I would like, so again, USE [yomitan](https://yomitan.wiki/)!)
+At the top of every page is a config section for setting up your Provider, API-key and model. There is also a furigana (a.k.a Ruby) toggle button that will put the hiragana readings above all the kanji (though it's automatically generated using `pykakasi` and is incorrect more often then I would like, so again, USE [Yomitan](https://yomitan.wiki/)!)
 
 ## Home Page
 Simple list of links to all the grammar topics, along with the number of completed `translation practice sentences` and number of completed `response practice sentences` (e.g. `(4/15) || (0/15)`). Clicking on any of the completion totals will:

@@ -408,7 +408,7 @@ async function handleSubmission(itemKey) {
   // first, open details dropdown to reveal answer and mark the answer as "answered"
   openDetails(itemKey);
   markItemAnswered(itemKey);
-  const inputEl = document.getElementById(INPUT_PREFIX+itemKey);
+  const inputEl = document.getElementById(INPUT_PREFIX + itemKey);
   const userText = inputEl.value.trim();
   if (!userText) return;
 
@@ -562,6 +562,8 @@ function renderLessonView(lessonKey) {
     return;
   }
 
+  document.getElementById('top-bar-title').textContent = lesson.Lesson || '';
+
   const keys = Object.keys(window.LESSONS_DATA);
   const curIdx = keys.indexOf(lessonKey);
   const prevKey = keys[curIdx - 1];
@@ -584,7 +586,7 @@ function renderLessonView(lessonKey) {
       <h2 class="section-title">例文 (Examples)</h2>
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => `
         <div class="item-card">
-          <div class="prompt-text">${idx+1}. ${item.Japanese}</div>
+          <div class="prompt-text">${idx + 1}. ${item.Japanese}</div>
           <details id="details-${getKey(EXAMPLE_SEC, idx)}">
             <summary>Translation</summary>
             <div class="details-content">
@@ -648,6 +650,8 @@ function renderLessonView(lessonKey) {
 }
 
 function renderIndexView() {
+  document.getElementById('top-bar-title').textContent = '';
+
   const data = window.LESSONS_DATA || {};
   const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';
   const app = document.getElementById('app');
@@ -739,6 +743,29 @@ function router() {
 /* ==========================================================================
    Config UI & Model Fetching
    ========================================================================== */
+
+function bindHowToUseModal() {
+  const modal = document.getElementById('how-to-use-modal');
+  const openBtn = document.getElementById('how-to-use-btn');
+  const closeBtn = document.getElementById('how-to-use-close-btn');
+  const contentEl = document.getElementById('how-to-use-content');
+
+  if (!modal || !openBtn) return;
+
+  openBtn.addEventListener('click', () => {
+    const markdown = window.HOW_TO_USE || 'No instructions provided.';
+    contentEl.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+    modal.showModal();
+  });
+
+  closeBtn?.addEventListener('click', () => modal.close());
+
+  // Close when clicking outside the dialog box
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.close();
+  });
+}
+
 async function fetchModels() {
   const adapter = adapters[state.config.provider];
   if (!adapter || !state.apiKey) {
@@ -966,6 +993,7 @@ async function init() {
   loadStoredConfig();
   loadAnsweredItems();
   bindConfigUI();
+  bindHowToUseModal();
 
   try {
     const res = await fetch('lessons.json');

@@ -6,14 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Japanese Grammar Study</title>
     <!-- increment this the number after v for cache busting -->
-    <link rel="stylesheet" href="style.css?v=4">
+    <link rel="stylesheet" href="style.css?v=5">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 </head>
 
 <body>
     <header id="top-bar">
-        <div class="brand progress-ratio-btn"><a href="#/">日本語文法</a></div>
+        <div class="brand-col">
+            <div class="brand progress-ratio-btn"><a href="#/">日本語文法</a></div>
+            <button type="button" id="how-to-use-btn" class="btn">How To Use</button>
+        </div>
+
+        <div id="top-bar-title" class="top-bar-title"></div>
         <div id="config-box" class="config-box">
             <div class="config-row">
                 <label class="toggle-label">
@@ -54,6 +59,13 @@
     <main id="app" class="container"></main>
 
     <div id="toast" class="toast hidden" role="alert"></div>
+
+    <dialog id="how-to-use-modal">
+        <div class="modal-header">
+            <button type="button" id="how-to-use-close-btn" class="btn">Close</button>
+        </div>
+        <div id="how-to-use-content" class="modal-body"></div>
+    </dialog>
 
     <script src="prompts.js"></script>
     <script src="app.js"></script>
