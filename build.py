@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-import pykakasi
+import fugashi
 
 ROOT_DIR = Path(__file__).resolve().parent
 DATA_DIR = ROOT_DIR / "data"
@@ -35,8 +35,8 @@ JA_KANJI_WORD: Final[re.Pattern[str]] = re.compile(
     r"[\u4e00-\u9faf々\u3040-\u309f\u30a0-\u30ff]*[\u4e00-\u9faf々]+[\u4e00-\u9faf々\u3040-\u309f\u30a0-\u30ff]*"
 )
 
-# Shared Kakasi converter instance
-kakasi_converter: Final[pykakasi.kakasi] = pykakasi.kakasi()
+# Shared Fugashi tagger instance (uses unidic-lite automatically)
+tagger: Final[fugashi.Tagger] = fugashi.Tagger()
 
 
 # ---------------------------------------------------------------------------
@@ -61,8 +61,15 @@ class RubySegment:
 
 
 # ---------------------------------------------------------------------------
-# Okurigana Alignment Helpers
+# Okurigana Alignment & Kana Helpers
 # ---------------------------------------------------------------------------
+
+
+def _kata_to_hira(text: str) -> str:
+    """Converts Katakana characters to Hiragana using standard Unicode offsets."""
+    return "".join(
+        chr(ord(char) - 0x60) if "\u30a1" <= char <= "\u30f6" else char for char in text
+    )
 
 
 def _common_prefix_length(first: str, second: str) -> int:
@@ -81,7 +88,7 @@ def _split_okurigana(orig: str, hira: str) -> RubySegment:
     orig_body = orig[pre_len:]
     hira_body = hira[pre_len:]
 
-    # 2. Match trailing kana (e.g., 'べる' in '食べる')
+    # 2. Match trailing kana (e.g., 'べ' in '食べ')
     suf_len = _common_prefix_length(orig_body[::-1], hira_body[::-1])
 
     base = orig_body[: len(orig_body) - suf_len]
@@ -105,9 +112,21 @@ def _token_to_ruby(orig: str, hira: str) -> str:
 
 
 def _convert_kanji_word(match: re.Match[str]) -> str:
-    """Converts a single kanji-bearing word into ruby HTML."""
-    tokens = kakasi_converter.convert(match.group(0))
-    return "".join(_token_to_ruby(t["orig"], t["hira"]) for t in tokens)
+    """Converts a single kanji-bearing word into ruby HTML using Fugashi."""
+    surface_text = match.group(0)
+    rubies: list[str] = []
+
+    for word in tagger(surface_text):
+        # Extract reading from UniDic feature (fallback to surface if unknown/punctuation)
+        kana = getattr(word.feature, "kana", None)
+        if not kana or kana == "*":
+            hira = word.surface
+        else:
+            hira = _kata_to_hira(kana)
+
+        rubies.append(_token_to_ruby(word.surface, hira))
+
+    return "".join(rubies)
 
 
 def add_furigana_plain(text: str) -> str:
