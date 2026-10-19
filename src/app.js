@@ -562,7 +562,7 @@ function renderLessonView(lessonKey) {
     return;
   }
 
-  document.getElementById('top-bar-title').textContent = lesson.Lesson || '';
+  document.getElementById('top-bar-title').innerHTML = lesson.Lesson || '';
 
   const keys = Object.keys(window.LESSONS_DATA);
   const curIdx = keys.indexOf(lessonKey);
@@ -650,7 +650,7 @@ function renderLessonView(lessonKey) {
 }
 
 function renderIndexView() {
-  document.getElementById('top-bar-title').textContent = '';
+  document.getElementById('top-bar-title').innerHTML = '';
 
   const data = window.LESSONS_DATA || {};
   const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';

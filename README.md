@@ -40,7 +40,7 @@ For the LLM-grading, this is where I've found the most value, because it gives i
 # Webpage Layout/Details
 
 ## Config
-At the top of every page is a config section for setting up your Provider, API-key and model. There is also a furigana (a.k.a Ruby) toggle button that will put the hiragana readings above all the kanji (though it's automatically generated using `pykakasi` and is incorrect more often then I would like, so again, USE [Yomitan](https://yomitan.wiki/)!)
+At the top of every page is a config section for setting up your Provider, API-key and model. There is also a furigana (a.k.a Ruby) toggle button that will put the hiragana readings above all the kanji (though it's automatically generated using `fugashi` and is incorrect often enough that I hesitate to fully back it, so again, USE [Yomitan](https://yomitan.wiki/)!)
 
 ## Home Page
 Simple list of links to all the grammar topics, along with the number of completed `translation practice sentences` and number of completed `response practice sentences` (e.g. `(4/15) || (0/15)`). Clicking on any of the completion totals will:
