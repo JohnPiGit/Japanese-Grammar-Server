@@ -826,14 +826,15 @@ function handleGlobalKeydown(e) {
 }
 
 function bindConfigUI() {
+  const fetchBtn = document.getElementById('cfg-fetch-models-btn');
   const providerEl = document.getElementById('cfg-provider');
   const endpointEl = document.getElementById('cfg-endpoint');
-  const keyEl = document.getElementById('cfg-key');
   const usernameEl = document.getElementById('cfg-username');
+  const furiganaEl = document.getElementById('cfg-furigana');
   const keyForm = document.getElementById('cfg-key-form');
   const modelEl = document.getElementById('cfg-model');
-  const furiganaEl = document.getElementById('cfg-furigana');
-  const fetchBtn = document.getElementById('cfg-fetch-models-btn');
+  const keyEl = document.getElementById('cfg-key');
+  const bar = document.getElementById('top-bar');
 
   providerEl.value = state.config.provider;
   endpointEl.value = state.config.customEndpoint;
@@ -882,6 +883,15 @@ function bindConfigUI() {
     saveConfig();
     router();
   });
+
+  // handle hiding away the bar when scrolling
+  let y = 0, last = 0;
+  window.addEventListener('scroll', () => {
+    const delta = window.scrollY - last;
+    y = Math.min(0, Math.max(-bar.offsetHeight, (window.scrollY <= 0 ? 0 : y - delta)));
+    bar.style.transform = `translateY(${y}px)`;
+    last = window.scrollY;
+  }, { passive: true });
 
   fetchBtn.addEventListener('click', fetchModels);
 }

@@ -37,6 +37,7 @@ body {
     top: 0;
     z-index: 50;
     gap: 1rem;
+    will-change: transform;
 }
 
 .brand a {
