@@ -427,3 +427,27 @@ dialog#how-to-use-modal::backdrop {
 .modal-body li {
     margin: 0.25rem 0;
 }
+
+.user-answer {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--think-bg);
+    color: var(--text);
+    font-weight: 500;
+    padding: 0.2rem 0.55rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+/* Adds a small gray label before the answer */
+.user-answer:not(:empty)::before {
+    content: "Your Response:";
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.user-answer:empty {
+    display: none;
+}

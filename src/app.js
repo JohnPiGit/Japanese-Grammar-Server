@@ -404,6 +404,16 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.add('hidden'), 3500);
 }
 
+function showUserAnswer(itemKey, userText) {
+  const userAnswerEl = document.getElementById(`user-answer-${itemKey}`);
+  userAnswerEl.innerText = userText;
+}
+
+function clearUserAnswer(itemKey) {
+  const userAnswerEl = document.getElementById(`user-answer-${itemKey}`);
+  userAnswerEl.innerText = "";
+}
+
 async function handleSubmission(itemKey) {
   // first, open details dropdown to reveal answer and mark the answer as "answered"
   openDetails(itemKey);
@@ -411,6 +421,8 @@ async function handleSubmission(itemKey) {
   const inputEl = document.getElementById(INPUT_PREFIX + itemKey);
   const userText = inputEl.value.trim();
   if (!userText) return;
+
+  showUserAnswer(itemKey, userText)
 
   const { sectionType, item } = getSectionTypeItem(itemKey);
   const lesson = getLesson(itemKey);
@@ -531,6 +543,7 @@ function cancelStream(itemKey) {
 function clearChat(itemKey) {
   cancelStream(itemKey);
   state.chatHistories.set(itemKey, []);
+  clearUserAnswer(itemKey);
   renderHistory(itemKey);
 }
 
@@ -584,61 +597,68 @@ function renderLessonView(lessonKey) {
 
 
       <h2 class="section-title">例文 (Examples)</h2>
-      ${(lesson['10 Example Sentences'] || []).map((item, idx) => `
+      ${(lesson['10 Example Sentences'] || []).map((item, idx) => {
+    const itemKey = getKey(EXAMPLE_SEC, idx);
+    return `
         <div class="item-card">
           <div class="prompt-text">${idx + 1}. ${item.Japanese}</div>
-          <details id="details-${getKey(EXAMPLE_SEC, idx)}">
+          <details id="details-${itemKey}">
             <summary>Translation</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Meaning:</strong> ${item.Translation}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(getKey(EXAMPLE_SEC, idx), examplePlaceholder)}
+              ${renderSubmissionDiv(itemKey, examplePlaceholder)}
             </div>
           </details>
         </div>
-      `).join('')}
+      `}).join('')}
 
       <h2 class="section-title">翻訳練習 (Translation Practice) ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
-      ${(lesson['15 Practice Sentences'] || []).map((item, idx) => `
+      ${(lesson['15 Practice Sentences'] || []).map((item, idx) => {
+      const itemKey = getKey(TRANSLATION_SEC, idx);
+      return `
         <div class="item-card">
           <div class="prompt-text">
-            ${makeCheckSpanButton(getKey(TRANSLATION_SEC, idx))}
-            ${idx + 1}. ${item.English}
+            ${makeCheckSpanButton(itemKey)}
+            ${idx + 1}. ${item.English} <span id="user-answer-${itemKey}" class="user-answer"></span>
           </div>
-          <details id="details-${getKey(TRANSLATION_SEC, idx)}" tabindex="-1">
+          <details id="details-${itemKey}" tabindex="-1">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey(TRANSLATION_SEC, idx), answerPlaceholder)}
+          ${renderSubmissionDiv(itemKey, answerPlaceholder)}
         </div>
-      `).join('')}
+      `}).join('')
+    }
 
       <h2 class="section-title">返答練習 (Response Practice) ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}</h2>
-      ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => `
+      ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => {
+      const itemKey = getKey(RESPONSE_SEC, idx);
+      return `
         <div class="item-card">
           <div class="prompt-text">
-            ${makeCheckSpanButton(getKey(RESPONSE_SEC, idx))}
-            ${idx + 1}. ${item['Respond-able statement']}
+            ${makeCheckSpanButton(itemKey)}
+            ${idx + 1}. ${item['Respond-able statement']} <span id="user-answer-${itemKey}" class="user-answer"></span>
           </div>
-          <details id="context-details-${getKey(RESPONSE_SEC, idx)}" tabindex="-1">
+          <details id="context-details-${itemKey}" tabindex="-1">
             <summary>Context</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Context:</strong> ${item.Context}</div>
             </div>
           </details>
-          <details id="details-${getKey(RESPONSE_SEC, idx)}" tabindex="-1">
+          <details id="details-${itemKey}" tabindex="-1">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey(RESPONSE_SEC, idx), answerPlaceholder)}
+          ${renderSubmissionDiv(itemKey, answerPlaceholder)}
         </div>
-      `).join('')}
+      `}).join('')}
 
       <nav class="lesson-nav">
         ${prevKey ? `<a href="#/lesson/${prevKey}" class="btn">← Previous Lesson</a>` : '<span></span>'}
