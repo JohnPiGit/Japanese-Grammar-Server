@@ -11,6 +11,7 @@
 #### 2. Lessons & Navigation
 * **Furigana Toggle:** Toggle hiragana ruby text on/off in the top bar. *(For reliable reading and definitions, pair with a browser extension like [Yomitan](https://yomitan.wiki/)).*
 * **Progress Tracking:** Click any completion counter on the home page (e.g., `(4/15)`) to toggle that section between reset `(0/15)` and complete `(15/15)`.
+* **Difficulty Tracking:** Slide any lesson slider to track your difficulty with that lesson (e.g. `4` for *medium* difficulty).
 * **Streaming Cancel:** Press `Ctrl + C` inside any active input box to stop that box's LLM generation *(or press the `stop` button)*.
 
 ---
@@ -20,3 +21,8 @@
 * **10 Example Sentences:** Click dropdowns to view translations, structural breakdowns, and ask targeted questions about that specific sentence.
 * **15 Translation Practice:** Translate English prompts into Japanese. The LLM evaluates your input against flexible reference criteria and provides feedback on grammar and naturalness.
 * **15 Response Practice:** Read the Japanese prompt and generate an appropriate reply. Open the dropdown if you need English context hints.
+
+---
+<br>
+    
+Learn more about this website at https://github.com/JohnPiGit/Japanese-Grammar-Server

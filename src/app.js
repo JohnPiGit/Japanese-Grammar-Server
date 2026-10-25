@@ -3,6 +3,7 @@
    ========================================================================== */
 const CONFIG_KEY = 'jp_grammar_study_config';
 const ANSWERED_KEY = 'jp_grammar_answered_items';
+const DIFFICULTY_KEY = 'jp_grammar_difficulty_levels';
 
 // These must be the same as the `SECTION_MAP` keys!
 const LESSON_SEC = 'ls'; // lesson/explanation
@@ -17,6 +18,13 @@ const SECTION_MAP = {
   resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
 };
 
+const CONFIG = {
+  0: { color: '#94a3b8', text: '' },
+  easy: { color: '#22c55e', text: 'Easy' },
+  medium: { color: '#eab308', text: 'Medium' },
+  hard: { color: '#ef4444', text: 'Hard' }
+};
+
 // Other constants (i'm kinda inconsistent)
 const INPUT_PREFIX = 'input-';
 
@@ -27,8 +35,10 @@ const state = {
     customEndpoint: '',
     selectedModel: '',
     furiganaEnabled: false,
+    topBarPinned: false,
   },
   answeredItems: new Set(),
+  lessonDifficulty: new Map(),
   // In-memory only!
   apiKey: '',
   lessonKey: '',
@@ -57,6 +67,17 @@ function loadAnsweredItems() {
     try {
       state.answeredItems = new Set(JSON.parse(saved));
     } catch (e) {
+      console.error('Failed to parse lesson difficulty:', e);
+    }
+  }
+}
+
+function loadLessonDifficulty() {
+  const saved = localStorage.getItem(DIFFICULTY_KEY);
+  if (saved) {
+    try {
+      state.lessonDifficulty = { ...state.lessonDifficulty, ...JSON.parse(saved) };
+    } catch (e) {
       console.error('Failed to parse answered items:', e);
     }
   }
@@ -64,6 +85,10 @@ function loadAnsweredItems() {
 
 function saveAnsweredItems() {
   localStorage.setItem(ANSWERED_KEY, JSON.stringify(Array.from(state.answeredItems)));
+}
+
+function saveLessonDifficulty() {
+  localStorage.setItem(DIFFICULTY_KEY, JSON.stringify(state.lessonDifficulty));
 }
 
 /* ==========================================================================
@@ -404,6 +429,16 @@ function showToast(message) {
   showToast.timer = setTimeout(() => toast.classList.add('hidden'), 3500);
 }
 
+function showUserAnswer(itemKey, userText) {
+  const userAnswerEl = document.getElementById(`user-answer-${itemKey}`);
+  userAnswerEl.innerText = userText;
+}
+
+function clearUserAnswer(itemKey) {
+  const userAnswerEl = document.getElementById(`user-answer-${itemKey}`);
+  userAnswerEl.innerText = "";
+}
+
 async function handleSubmission(itemKey) {
   // first, open details dropdown to reveal answer and mark the answer as "answered"
   openDetails(itemKey);
@@ -411,6 +446,8 @@ async function handleSubmission(itemKey) {
   const inputEl = document.getElementById(INPUT_PREFIX + itemKey);
   const userText = inputEl.value.trim();
   if (!userText) return;
+
+  showUserAnswer(itemKey, userText)
 
   const { sectionType, item } = getSectionTypeItem(itemKey);
   const lesson = getLesson(itemKey);
@@ -524,13 +561,38 @@ function toggleSubmissionState(itemKey, isStreaming) {
   document.getElementById(`stop-btn-${itemKey}`)?.classList.toggle('hidden', !isStreaming);
 }
 
+function popUserMessage(itemKey) {
+  const history = state.chatHistories.get(itemKey) || [];
+  if (history.length > 0 && history[history.length - 1].role === 'user') {
+    return history.pop().content;
+  }
+}
+
+function popAndPopulateUserMessage(itemKey) {
+  const message = popUserMessage(itemKey);
+  if (message) {
+    (el => el && (el.value = message))(document.getElementById(INPUT_PREFIX + itemKey));
+    clearUserAnswer(itemKey);
+  }
+}
+
+function focusInputBox(itemKey) {
+  document.getElementById(INPUT_PREFIX + itemKey)?.focus();
+}
+
 function cancelStream(itemKey) {
-  state.activeControllers.get(itemKey)?.abort();
+  const controller = state.activeControllers.get(itemKey);
+  if (controller) {
+    controller.abort();
+    popAndPopulateUserMessage(itemKey);
+  }
+  focusInputBox(itemKey);
 }
 
 function clearChat(itemKey) {
   cancelStream(itemKey);
   state.chatHistories.set(itemKey, []);
+  clearUserAnswer(itemKey);
   renderHistory(itemKey);
 }
 
@@ -551,9 +613,21 @@ function renderSubmissionDiv(itemKey, placeholder) {
     </div>`;
 }
 
+function render例文() {
+  return '<ruby>例<rt>れい</rt>文<rt>ぶん</rt></ruby> (Examples)';
+}
+
+function render翻訳練習() {
+  return '<ruby>翻<rt>ほん</rt>訳<rt>やく</rt>練<rt>れん</rt>習<rt>しゅう</rt></ruby> (Translation Practice)';
+}
+
+function render返答練習() {
+  return '<ruby>返<rt>へん</rt>答<rt>とう</rt>練<rt>れん</rt>習<rt>しゅう</rt></ruby> (Response Practice)';
+}
+
+
 function renderLessonView(lessonKey) {
-  const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';
-  const lesson = window.LESSONS_DATA?.[lessonKey]?.[mode];
+  const lesson = window.LESSONS_DATA?.[lessonKey]?.furigana || window.LESSONS_DATA?.[lessonKey]?.normal;
   const app = document.getElementById('app');
   const keysBySection = allKeysBySection(lessonKey);
 
@@ -574,6 +648,8 @@ function renderLessonView(lessonKey) {
   const examplePlaceholder = "Ask a question about this example..."
   const answerPlaceholder = "type your answer or follow-up question..."
 
+  const counter = { ix: 0 };
+
   app.innerHTML = `
     <article>
       <h1 class="lesson-title">${lesson.Lesson}</h1>
@@ -582,63 +658,77 @@ function renderLessonView(lessonKey) {
         ${renderSubmissionDiv(getKey(LESSON_SEC, 0), lessonPlaceholder)}
       </section>
 
+      ${formatLessonDifficultySlider(lessonKey, counter)}
 
-      <h2 class="section-title">例文 (Examples)</h2>
-      ${(lesson['10 Example Sentences'] || []).map((item, idx) => `
+      <h2 class="section-title">${render例文()}</h2>
+      ${(lesson['10 Example Sentences'] || []).map((item, idx) => {
+    const itemKey = getKey(EXAMPLE_SEC, idx);
+    return `
         <div class="item-card">
           <div class="prompt-text">${idx + 1}. ${item.Japanese}</div>
-          <details id="details-${getKey(EXAMPLE_SEC, idx)}">
+          <details id="details-${itemKey}">
             <summary>Translation</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Meaning:</strong> ${item.Translation}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
-              ${renderSubmissionDiv(getKey(EXAMPLE_SEC, idx), examplePlaceholder)}
+              ${renderSubmissionDiv(itemKey, examplePlaceholder)}
             </div>
           </details>
         </div>
-      `).join('')}
+      `}).join('')}
 
-      <h2 class="section-title">翻訳練習 (Translation Practice) ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
-      ${(lesson['15 Practice Sentences'] || []).map((item, idx) => `
+      ${formatLessonDifficultySlider(lessonKey, counter)}
+
+      <h2 class="section-title">${render翻訳練習()} ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
+      ${(lesson['15 Practice Sentences'] || []).map((item, idx) => {
+      const itemKey = getKey(TRANSLATION_SEC, idx);
+      return `
         <div class="item-card">
           <div class="prompt-text">
-            ${makeCheckSpanButton(getKey(TRANSLATION_SEC, idx))}
-            ${idx + 1}. ${item.English}
+            ${makeCheckSpanButton(itemKey)}
+            ${idx + 1}. ${item.English} <span id="user-answer-${itemKey}" class="user-answer"></span>
           </div>
-          <details id="details-${getKey(TRANSLATION_SEC, idx)}" tabindex="-1">
+          <details id="details-${itemKey}" tabindex="-1">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey(TRANSLATION_SEC, idx), answerPlaceholder)}
+          ${renderSubmissionDiv(itemKey, answerPlaceholder)}
         </div>
-      `).join('')}
+      `}).join('')
+    }
 
-      <h2 class="section-title">返答練習 (Response Practice) ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}</h2>
-      ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => `
+      ${formatLessonDifficultySlider(lessonKey, counter)}
+
+      <h2 class="section-title">${render返答練習()} ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}</h2>
+      ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => {
+      const itemKey = getKey(RESPONSE_SEC, idx);
+      return `
         <div class="item-card">
           <div class="prompt-text">
-            ${makeCheckSpanButton(getKey(RESPONSE_SEC, idx))}
-            ${idx + 1}. ${item['Respond-able statement']}
+            ${makeCheckSpanButton(itemKey)}
+            ${idx + 1}. ${item['Respond-able statement']} <span id="user-answer-${itemKey}" class="user-answer"></span>
           </div>
-          <details id="context-details-${getKey(RESPONSE_SEC, idx)}" tabindex="-1">
+          <details id="context-details-${itemKey}" tabindex="-1">
             <summary>Context</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Context:</strong> ${item.Context}</div>
             </div>
           </details>
-          <details id="details-${getKey(RESPONSE_SEC, idx)}" tabindex="-1">
+          <details id="details-${itemKey}" tabindex="-1">
             <summary>Answers</summary>
             <div class="details-content">
               <div class="meta-block"><strong>Reference Answers:</strong> ${renderReferenceAnswers(item['Reference Answers'])}</div>
               <div class="meta-block"><strong>Explanation:</strong> ${item.Explanation}</div>
             </div>
           </details>
-          ${renderSubmissionDiv(getKey(RESPONSE_SEC, idx), answerPlaceholder)}
+          ${renderSubmissionDiv(itemKey, answerPlaceholder)}
         </div>
-      `).join('')}
+      `}).join('')}
+
+      ${formatLessonDifficultySlider(lessonKey, counter)}
 
       <nav class="lesson-nav">
         ${prevKey ? `<a href="#/lesson/${prevKey}" class="btn">← Previous Lesson</a>` : '<span></span>'}
@@ -653,18 +743,39 @@ function renderIndexView() {
   document.getElementById('top-bar-title').innerHTML = '';
 
   const data = window.LESSONS_DATA || {};
-  const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';
   const app = document.getElementById('app');
 
-  const links = Object.entries(data).map(([key, val]) => {
-    const title = val[mode]?.Lesson || key;
-    return `<li>${completedSentences(key)} <a href="#/lesson/${key}">${title}</a></li>`;
+  const rows = Object.entries(data).map(([key, val]) => {
+    const title = val.furigana?.Lesson || val.normal?.Lesson || key;
+    return `
+      <tr>
+        <td>${completedSentences(key)}</td>
+        <td>${formatDifficultySlider(key)} &nbsp;</td>
+        <td><a href="#/lesson/${key}">${title}</a></td>
+      </tr>
+    `;
   }).join('');
 
   app.innerHTML = `
     <div class="lesson-index">
       <h1>Japanese Grammar Lessons</h1>
-      <ul>${links || '<p>No lessons available.</p>'}</ul>
+      ${rows
+      ? `
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Completion</th>
+                  <th style="text-align: left;">Difficulty</th>
+                  <th style="text-align: left;">Lesson Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          `
+      : '<p>No lessons available.</p>'
+    }
     </div>
   `;
 }
@@ -676,6 +787,23 @@ function toggleSectionProgress(lessonKey, section) {
   keys.forEach(action);
   saveAnsweredItems();
   updateLessonProgress(lessonKey);
+}
+
+function formatLessonDifficultySlider(lessonKey, counter) {
+  idPrefix = `${lessonKey}-${counter.ix}`;
+  counter.ix++;
+  return `<div class="slider-card" style="--scale: 1.4;"> Lesson Difficulty: ${formatDifficultySlider(idPrefix)}</div>`
+}
+
+function formatDifficultySlider(idPrefix) {
+  return `<div class="slider-card">
+            <div class="slider-wrapper">
+              <input type="range" id="${idPrefix}-slider" min="0" max="9" value="0" step="1">
+              <span class="slider-value" id="${idPrefix}-slider-value">0</span>
+            </div>
+
+            <div class="difficulty-label" id="${idPrefix}-difficulty-label"></div>
+          </div>`
 }
 
 function formatProgressRatio(current, total, lessonKey, section) {
@@ -733,11 +861,13 @@ function router() {
   if (hash.startsWith('#/lesson/')) {
     state.lessonKey = hash.replace('#/lesson/', '')
     renderLessonView(state.lessonKey);
+    bindLessonDifficultySlider(state.lessonKey)
   } else {
     renderIndexView();
+    bindDifficultySlider();
   }
   window.scrollTo(0, 0);
-  applyAnsweredCheckmarks()
+  applyAnsweredCheckmarks();
 }
 
 /* ==========================================================================
@@ -825,20 +955,43 @@ function handleGlobalKeydown(e) {
   }
 }
 
+function handleTopBarScrolling(bar) {
+  // handle hiding away the bar when scrolling
+  let y = 0, last = 0;
+  window.addEventListener('scroll', () => {
+    if (state.config.topBarPinned) {
+      if (y !== 0) {
+        y = 0;
+        bar.style.transform = 'translateY(0)';
+      }
+      last = window.scrollY;
+      return;
+    }
+
+    const delta = window.scrollY - last;
+    y = Math.min(0, Math.max(-bar.offsetHeight, (window.scrollY <= 0 ? 0 : y - delta)));
+    bar.style.transform = `translateY(${y}px)`;
+    last = window.scrollY;
+  }, { passive: true });
+}
+
 function bindConfigUI() {
+  const fetchBtn = document.getElementById('cfg-fetch-models-btn');
+  const pinTopBarEl = document.getElementById('cfg-pin-topbar');
   const providerEl = document.getElementById('cfg-provider');
   const endpointEl = document.getElementById('cfg-endpoint');
-  const keyEl = document.getElementById('cfg-key');
   const usernameEl = document.getElementById('cfg-username');
+  const furiganaEl = document.getElementById('cfg-furigana');
   const keyForm = document.getElementById('cfg-key-form');
   const modelEl = document.getElementById('cfg-model');
-  const furiganaEl = document.getElementById('cfg-furigana');
-  const fetchBtn = document.getElementById('cfg-fetch-models-btn');
+  const keyEl = document.getElementById('cfg-key');
+  const bar = document.getElementById('top-bar');
 
   providerEl.value = state.config.provider;
   endpointEl.value = state.config.customEndpoint;
   if (usernameEl) usernameEl.value = state.config.provider;
   furiganaEl.checked = state.config.furiganaEnabled;
+  pinTopBarEl.checked = Boolean(state.config.topBarPinned);
   document.body.classList.toggle('hide-furigana', !state.config.furiganaEnabled);
 
   const toggleEndpoint = () => endpointEl.classList.toggle('hidden', providerEl.value !== 'Custom');
@@ -878,12 +1031,116 @@ function bindConfigUI() {
 
   furiganaEl.addEventListener('change', () => {
     state.config.furiganaEnabled = furiganaEl.checked;
+    // No re-render / reload needed! The CSS instantly hides/shows the furigana in place ... 馬鹿
     document.body.classList.toggle('hide-furigana', !furiganaEl.checked);
     saveConfig();
-    router();
   });
 
+  // top-bar pin handler
+  pinTopBarEl?.addEventListener('change', () => {
+    state.config.topBarPinned = pinTopBarEl.checked;
+    if (state.config.topBarPinned) {
+      y = 0;
+      bar.style.transform = 'translateY(0)';
+    }
+    saveConfig();
+  });
+
+  handleTopBarScrolling(bar);
+
   fetchBtn.addEventListener('click', fetchModels);
+}
+
+function numDifficultySliders() {
+  const sliderInstances = document.querySelectorAll(".difficulty-label");
+  return sliderInstances.length
+}
+
+// update the slider based on it's slider value (or update it's value directly)
+function updateSlider(lessonKey, updateFromStorage = false, ix = null) {
+  let idPrefix = (ix !== null) ? `${lessonKey}-${ix}` : lessonKey;
+
+  const slider = document.getElementById(idPrefix + '-slider');
+
+  // set the slider value if one was provided
+  if (updateFromStorage) {
+    slider.value = state.lessonDifficulty[lessonKey] || 0;
+  }
+  const val = parseInt(slider.value);
+
+  if (ix !== null) {
+    // loop through all of the sliders for the certain
+    for (let i = 0; i < numDifficultySliders(); i++) {
+      idPrefix = `${lessonKey}-${i}`;
+      _updateSlider(idPrefix, val);
+    }
+  } else {
+    _updateSlider(idPrefix, val);
+  }
+
+  // Save off slider value (if we aren't updating from storage)
+  if (!updateFromStorage) {
+    state.lessonDifficulty[lessonKey] = val;
+    saveLessonDifficulty();
+  }
+}
+
+function _updateSlider(idPrefix, val) {
+  const slider = document.getElementById(idPrefix + '-slider');
+  const display = document.getElementById(idPrefix + '-slider-value');
+  const label = document.getElementById(idPrefix + '-difficulty-label');
+  let difficulty;
+
+
+  // Determine state based on value
+  if (val === 0) {
+    difficulty = CONFIG[0];
+  } else if (val >= 1 && val <= 3) {
+    difficulty = CONFIG.easy;
+  } else if (val >= 4 && val <= 6) {
+    difficulty = CONFIG.medium;
+  } else {
+    difficulty = CONFIG.hard;
+  }
+
+  // Calculate track fill percentage
+  const percentage = (val / slider.max) * 100;
+
+  // Update dynamic CSS custom property & track background gradient
+  slider.style.setProperty('--slider-color', difficulty.color);
+  slider.style.background = `linear-gradient(to right, ${difficulty.color} ${percentage}%, #e2e8f0 ${percentage}%)`;
+
+  // Update text values
+  slider.value = val;
+  display.textContent = val;
+  label.textContent = difficulty.text;
+}
+
+// bind event listeners to the main page difficulty sliders
+function bindDifficultySlider() {
+  const lessonKeys = Object.keys(window.LESSONS_DATA);
+  lessonKeys.forEach(lessonKey => {
+    const slider = document.getElementById(lessonKey + '-slider');
+    if (slider) {
+      slider.addEventListener('input', () => updateSlider(lessonKey));
+
+      // update the initial state of our slider to our saved value for it
+      updateSlider(lessonKey, true)
+    }
+  })
+}
+
+// bind event listeners to the difficulty sliders for a single lesson page
+function bindLessonDifficultySlider(lessonKey) {
+  for (let ix = 0; ix < numDifficultySliders(); ix++) {
+    const slider = document.getElementById(`${lessonKey}-${ix}-slider`);
+    slider.addEventListener('input', () => updateSlider(lessonKey, false, ix));
+  }
+
+  // update the initial state of our sliders to our saved value for it
+  if (numDifficultySliders()) {
+    updateSlider(lessonKey, true, 0)
+  }
 }
 
 /* ==========================================================================
@@ -992,6 +1249,7 @@ async function copyToClipboard(text) {
 async function init() {
   loadStoredConfig();
   loadAnsweredItems();
+  loadLessonDifficulty();
   bindConfigUI();
   bindHowToUseModal();
 

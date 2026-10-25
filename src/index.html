@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Japanese Grammar Study</title>
     <!-- increment this the number after v for cache busting -->
-    <link rel="stylesheet" href="style.css?v=5">
+    <link rel="stylesheet" href="style.css?v=7">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
 </head>
@@ -14,16 +14,21 @@
 <body>
     <header id="top-bar">
         <div class="brand-col">
-            <div class="brand progress-ratio-btn"><a href="#/">日本語文法</a></div>
+            <div class="brand progress-ratio-btn"><a href="#/"><ruby>日<rt>に</rt>本<rt>ほん</rt>語<rt>ご</rt>文<rt>ぶん</rt>法<rt>
+                            ぽう</rt></ruby></a></div>
             <button type="button" id="how-to-use-btn" class="btn">How To Use</button>
         </div>
 
         <div id="top-bar-title" class="top-bar-title"></div>
         <div id="config-box" class="config-box">
             <div class="config-row">
-                <label class="toggle-label">
+                <label class="toggle-label" title="Toggle furigana/ruby text for kanji">
                     <input type="checkbox" id="cfg-furigana">
-                    <span>振仮名 (Furigana)</span>
+                    <span><ruby>振<rt>ふり</rt>仮<rt>が</rt>名<rt>な</rt></ruby> (Furigana)</span>
+                </label>
+                <label class="toggle-label" title="Pin the topbar to the top, preventing it from scrolling away">
+                    <input type="checkbox" id="cfg-pin-topbar">
+                    <span>Pin Top-bar</span>
                 </label>
                 <select id="cfg-provider" aria-label="LLM Provider">
                     <option value="OpenAI">OpenAI</option>
