@@ -743,11 +743,10 @@ function renderIndexView() {
   document.getElementById('top-bar-title').innerHTML = '';
 
   const data = window.LESSONS_DATA || {};
-  const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';
   const app = document.getElementById('app');
 
   const rows = Object.entries(data).map(([key, val]) => {
-    const title = val[mode]?.Lesson || key;
+    const title = val.furigana?.Lesson || val.normal?.Lesson || key;
     return `
       <tr>
         <td>${completedSentences(key)}</td>
@@ -958,22 +957,22 @@ function handleGlobalKeydown(e) {
 
 function handleTopBarScrolling(bar) {
   // handle hiding away the bar when scrolling
-    let y = 0, last = 0;
-    window.addEventListener('scroll', () => {
-      if (state.config.topBarPinned) {
-        if (y !== 0) {
-          y = 0;
-          bar.style.transform = 'translateY(0)';
-        }
-        last = window.scrollY;
-        return;
+  let y = 0, last = 0;
+  window.addEventListener('scroll', () => {
+    if (state.config.topBarPinned) {
+      if (y !== 0) {
+        y = 0;
+        bar.style.transform = 'translateY(0)';
       }
-  
-      const delta = window.scrollY - last;
-      y = Math.min(0, Math.max(-bar.offsetHeight, (window.scrollY <= 0 ? 0 : y - delta)));
-      bar.style.transform = `translateY(${y}px)`;
       last = window.scrollY;
-    }, { passive: true });
+      return;
+    }
+
+    const delta = window.scrollY - last;
+    y = Math.min(0, Math.max(-bar.offsetHeight, (window.scrollY <= 0 ? 0 : y - delta)));
+    bar.style.transform = `translateY(${y}px)`;
+    last = window.scrollY;
+  }, { passive: true });
 }
 
 function bindConfigUI() {
