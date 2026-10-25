@@ -20,3 +20,7 @@
 * **10 Example Sentences:** Click dropdowns to view translations, structural breakdowns, and ask targeted questions about that specific sentence.
 * **15 Translation Practice:** Translate English prompts into Japanese. The LLM evaluates your input against flexible reference criteria and provides feedback on grammar and naturalness.
 * **15 Response Practice:** Read the Japanese prompt and generate an appropriate reply. Open the dropdown if you need English context hints.
+
+---
+
+Learn more about this website at https://github.com/JohnPiGit/Japanese-Grammar-Server

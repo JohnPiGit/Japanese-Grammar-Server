@@ -3,6 +3,7 @@
    ========================================================================== */
 const CONFIG_KEY = 'jp_grammar_study_config';
 const ANSWERED_KEY = 'jp_grammar_answered_items';
+const DIFFICULTY_KEY = 'jp_grammar_difficulty_levels';
 
 // These must be the same as the `SECTION_MAP` keys!
 const LESSON_SEC = 'ls'; // lesson/explanation
@@ -17,6 +18,13 @@ const SECTION_MAP = {
   resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
 };
 
+const CONFIG = {
+  0: { color: '#94a3b8', text: '' },
+  easy: { color: '#22c55e', text: 'Easy' },
+  medium: { color: '#eab308', text: 'Medium' },
+  hard: { color: '#ef4444', text: 'Hard' }
+};
+
 // Other constants (i'm kinda inconsistent)
 const INPUT_PREFIX = 'input-';
 
@@ -29,6 +37,7 @@ const state = {
     furiganaEnabled: false,
   },
   answeredItems: new Set(),
+  lessonDifficulty: new Set(),
   // In-memory only!
   apiKey: '',
   lessonKey: '',
@@ -55,6 +64,17 @@ function loadAnsweredItems() {
   const saved = localStorage.getItem(ANSWERED_KEY);
   if (saved) {
     try {
+      state.lessonDifficulty = new Set(JSON.parse(saved));
+    } catch (e) {
+      console.error('Failed to parse lesson difficulty:', e);
+    }
+  }
+}
+
+function loadLessonDifficulty() {
+  const saved = localStorage.getItem(DIFFICULTY_KEY);
+  if (saved) {
+    try {
       state.answeredItems = new Set(JSON.parse(saved));
     } catch (e) {
       console.error('Failed to parse answered items:', e);
@@ -64,6 +84,10 @@ function loadAnsweredItems() {
 
 function saveAnsweredItems() {
   localStorage.setItem(ANSWERED_KEY, JSON.stringify(Array.from(state.answeredItems)));
+}
+
+function saveLessonDifficulty() {
+  localStorage.setItem(DIFFICULTY_KEY, JSON.stringify(Array.from(state.lessonDifficulty)));
 }
 
 /* ==========================================================================
@@ -595,6 +619,7 @@ function renderLessonView(lessonKey) {
         ${renderSubmissionDiv(getKey(LESSON_SEC, 0), lessonPlaceholder)}
       </section>
 
+      <div class="slider-card" style="--scale: 1.4;"> Lesson Difficulty: ${formatDifficultySlider(lessonKey)}</div>
 
       <h2 class="section-title">例文 (Examples)</h2>
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => {
@@ -678,7 +703,7 @@ function renderIndexView() {
 
   const links = Object.entries(data).map(([key, val]) => {
     const title = val[mode]?.Lesson || key;
-    return `<li>${completedSentences(key)} <a href="#/lesson/${key}">${title}</a></li>`;
+    return `<li>${completedSentences(key)} <a href="#/lesson/${key}">${title}</a> ${formatDifficultySlider(key)}</li>`;
   }).join('');
 
   app.innerHTML = `
@@ -696,6 +721,17 @@ function toggleSectionProgress(lessonKey, section) {
   keys.forEach(action);
   saveAnsweredItems();
   updateLessonProgress(lessonKey);
+}
+
+function formatDifficultySlider(lessonKey) {
+  return `<div class="slider-card">
+            <div class="slider-wrapper">
+              <input type="range" id="${lessonKey}-slider" min="0" max="9" value="0" step="1">
+              <span class="slider-value" id="${lessonKey}-slider-value">0</span>
+            </div>
+
+            <div class="difficulty-label" id="${lessonKey}-difficulty-label"></div>
+          </div>`
 }
 
 function formatProgressRatio(current, total, lessonKey, section) {
@@ -757,7 +793,8 @@ function router() {
     renderIndexView();
   }
   window.scrollTo(0, 0);
-  applyAnsweredCheckmarks()
+  applyAnsweredCheckmarks();
+  bindDifficultySlider();
 }
 
 /* ==========================================================================
@@ -916,6 +953,61 @@ function bindConfigUI() {
   fetchBtn.addEventListener('click', fetchModels);
 }
 
+// update the slider based on it's slider value (or update it's value directly)
+function updateSlider(lessonKey, updateFromStorage = false) {
+  const slider = document.getElementById(lessonKey + '-slider');
+  const display = document.getElementById(lessonKey + '-slider-value');
+  const label = document.getElementById(lessonKey + '-difficulty-label');
+
+  // set the slider value if one was provided
+  if (updateFromStorage) {
+    slider.value = state.lessonDifficulty[lessonKey] || 0;
+  }
+  const val = parseInt(slider.value);
+  let difficulty;
+
+  // Determine state based on value
+  if (val === 0) {
+    difficulty = CONFIG[0];
+  } else if (val >= 1 && val <= 3) {
+    difficulty = CONFIG.easy;
+  } else if (val >= 4 && val <= 6) {
+    difficulty = CONFIG.medium;
+  } else {
+    difficulty = CONFIG.hard;
+  }
+
+  // Calculate track fill percentage
+  const percentage = (val / slider.max) * 100;
+
+  // Update dynamic CSS custom property & track background gradient
+  slider.style.setProperty('--slider-color', difficulty.color);
+  slider.style.background = `linear-gradient(to right, ${difficulty.color} ${percentage}%, #e2e8f0 ${percentage}%)`;
+
+  // Update text values
+  display.textContent = val;
+  label.textContent = difficulty.text;
+
+  // Save off slider value (if we aren't updating from storage)
+  if (!updateFromStorage) {
+    state.lessonDifficulty[lessonKey] = val;
+    saveLessonDifficulty();
+  }
+}
+
+function bindDifficultySlider() {
+  const lessonKeys = Object.keys(window.LESSONS_DATA);
+  lessonKeys.forEach(lessonKey => {
+    const slider = document.getElementById(lessonKey + '-slider');
+    if (slider) {
+      slider.addEventListener('input', () => updateSlider(lessonKey));
+
+      // update the initial state of our slider to our saved value for it
+      updateSlider(lessonKey, true)
+    }
+  })
+}
+
 /* ==========================================================================
    Item Key Resolution Helpers
    ========================================================================== */
@@ -1022,6 +1114,7 @@ async function copyToClipboard(text) {
 async function init() {
   loadStoredConfig();
   loadAnsweredItems();
+  loadLessonDifficulty();
   bindConfigUI();
   bindHowToUseModal();
 
