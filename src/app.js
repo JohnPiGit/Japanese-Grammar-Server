@@ -588,9 +588,21 @@ function renderSubmissionDiv(itemKey, placeholder) {
     </div>`;
 }
 
+function render例文() {
+  return '<ruby>例<rt>れい</rt>文<rt>ぶん</rt></ruby> (Examples)';
+}
+
+function render翻訳練習() {
+  return '<ruby>翻<rt>ほん</rt>訳<rt>やく</rt>練<rt>れん</rt>習<rt>しゅう</rt></ruby> (Translation Practice)';
+}
+
+function render返答練習() {
+  return '<ruby>返<rt>へん</rt>答<rt>とう</rt>練<rt>れん</rt>習<rt>しゅう</rt></ruby> (Response Practice)';
+}
+
+
 function renderLessonView(lessonKey) {
-  const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';
-  const lesson = window.LESSONS_DATA?.[lessonKey]?.[mode];
+  const lesson = window.LESSONS_DATA?.[lessonKey]?.furigana || window.LESSONS_DATA?.[lessonKey]?.normal;
   const app = document.getElementById('app');
   const keysBySection = allKeysBySection(lessonKey);
 
@@ -623,7 +635,7 @@ function renderLessonView(lessonKey) {
 
       ${formatLessonDifficultySlider(lessonKey, counter)}
 
-      <h2 class="section-title">例文 (Examples)</h2>
+      <h2 class="section-title">${render例文()}</h2>
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => {
     const itemKey = getKey(EXAMPLE_SEC, idx);
     return `
@@ -642,7 +654,7 @@ function renderLessonView(lessonKey) {
 
       ${formatLessonDifficultySlider(lessonKey, counter)}
 
-      <h2 class="section-title">翻訳練習 (Translation Practice) ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
+      <h2 class="section-title">${render翻訳練習()} ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
       ${(lesson['15 Practice Sentences'] || []).map((item, idx) => {
       const itemKey = getKey(TRANSLATION_SEC, idx);
       return `
@@ -665,7 +677,7 @@ function renderLessonView(lessonKey) {
 
       ${formatLessonDifficultySlider(lessonKey, counter)}
 
-      <h2 class="section-title">返答練習 (Response Practice) ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}</h2>
+      <h2 class="section-title">${render返答練習()} ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}</h2>
       ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => {
       const itemKey = getKey(RESPONSE_SEC, idx);
       return `
@@ -973,9 +985,9 @@ function bindConfigUI() {
 
   furiganaEl.addEventListener('change', () => {
     state.config.furiganaEnabled = furiganaEl.checked;
+    // No re-render / reload needed! The CSS instantly hides/shows the furigana in place ... 馬鹿
     document.body.classList.toggle('hide-furigana', !furiganaEl.checked);
     saveConfig();
-    rerenderPreservingState();
   });
 
   // handle hiding away the bar when scrolling
@@ -1130,70 +1142,6 @@ function allKeysBySection(lessonKey) {
   }
 
   return keys;
-}
-
-/* ==========================================================================
-   Handle re-rendering furigana
-   ========================================================================== */
-
-function rerenderPreservingState() {
-  const scrollX = window.scrollX;
-  const scrollY = window.scrollY;
-  const hash = window.location.hash || '#/';
-
-  if (hash.startsWith('#/lesson/')) {
-    // 1. Snapshot open dropdowns, unsubmitted inputs, and shown user answers
-    const openDetailsIds = Array.from(document.querySelectorAll('details[open]'))
-      .map(el => el.id)
-      .filter(Boolean);
-
-    const savedInputs = new Map();
-    document.querySelectorAll(`input[id^="${INPUT_PREFIX}"]`).forEach(input => {
-      if (input.value) savedInputs.set(input.id, input.value);
-    });
-
-    const savedUserAnswers = new Map();
-    document.querySelectorAll('.user-answer').forEach(el => {
-      if (el.innerText) savedUserAnswers.set(el.id, el.innerText);
-    });
-
-    // 2. Re-render lesson view and rebind sliders
-    // state.lessonKey = hash.replace('#/lesson/', '');
-    renderLessonView(state.lessonKey);
-    bindLessonDifficultySlider(state.lessonKey);
-
-    // 3. Restore dropdowns, inputs, and shown answers
-    openDetailsIds.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.open = true;
-    });
-
-    savedInputs.forEach((val, id) => {
-      const input = document.getElementById(id);
-      if (input) input.value = val;
-    });
-
-    savedUserAnswers.forEach((text, id) => {
-      const el = document.getElementById(id);
-      if (el) el.innerText = text;
-    });
-
-    // 4. Re-render chat histories and restore active streaming button states
-    for (const itemKey of state.chatHistories.keys()) {
-      renderHistory(itemKey);
-    }
-    for (const itemKey of state.activeControllers.keys()) {
-      toggleSubmissionState(itemKey, true);
-    }
-
-  } else {
-    renderIndexView();
-    bindDifficultySlider();
-  }
-  applyAnsweredCheckmarks();
-
-  // 5. Restore scroll position
-  window.scrollTo(scrollX, scrollY);
 }
 
 /* ==========================================================================

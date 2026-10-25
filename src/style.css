@@ -126,7 +126,8 @@ select {
 
 /* Furigana Toggling */
 body.hide-furigana ruby rt {
-    display: none;
+    visibility: hidden;
+    user-select: none;
 }
 
 /* Main Container */
