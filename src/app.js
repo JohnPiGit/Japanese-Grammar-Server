@@ -560,8 +560,32 @@ function toggleSubmissionState(itemKey, isStreaming) {
   document.getElementById(`stop-btn-${itemKey}`)?.classList.toggle('hidden', !isStreaming);
 }
 
+function popUserMessage(itemKey) {
+  const history = state.chatHistories.get(itemKey) || [];
+  if (history.length > 0 && history[history.length - 1].role === 'user') {
+    return history.pop().content;
+  }
+}
+
+function popAndPopulateUserMessage(itemKey) {
+  const message = popUserMessage(itemKey);
+  if (message) {
+    (el => el && (el.value = message))(document.getElementById(INPUT_PREFIX + itemKey));
+    clearUserAnswer(itemKey);
+  }
+}
+
+function focusInputBox(itemKey) {
+  document.getElementById(INPUT_PREFIX + itemKey)?.focus();
+}  
+
 function cancelStream(itemKey) {
-  state.activeControllers.get(itemKey)?.abort();
+  const controller = state.activeControllers.get(itemKey);
+  if (controller) {
+    controller.abort();
+    popAndPopulateUserMessage(itemKey);
+  }
+  focusInputBox(itemKey);
 }
 
 function clearChat(itemKey) {
