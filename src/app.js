@@ -37,7 +37,7 @@ const state = {
     furiganaEnabled: false,
   },
   answeredItems: new Set(),
-  lessonDifficulty: new Set(),
+  lessonDifficulty: new Map(),
   // In-memory only!
   apiKey: '',
   lessonKey: '',
@@ -64,7 +64,7 @@ function loadAnsweredItems() {
   const saved = localStorage.getItem(ANSWERED_KEY);
   if (saved) {
     try {
-      state.lessonDifficulty = new Set(JSON.parse(saved));
+      state.answeredItems = new Set(JSON.parse(saved));
     } catch (e) {
       console.error('Failed to parse lesson difficulty:', e);
     }
@@ -75,7 +75,7 @@ function loadLessonDifficulty() {
   const saved = localStorage.getItem(DIFFICULTY_KEY);
   if (saved) {
     try {
-      state.answeredItems = new Set(JSON.parse(saved));
+      state.lessonDifficulty = { ...state.lessonDifficulty, ...JSON.parse(saved) };
     } catch (e) {
       console.error('Failed to parse answered items:', e);
     }
@@ -87,7 +87,7 @@ function saveAnsweredItems() {
 }
 
 function saveLessonDifficulty() {
-  localStorage.setItem(DIFFICULTY_KEY, JSON.stringify(Array.from(state.lessonDifficulty)));
+  localStorage.setItem(DIFFICULTY_KEY, JSON.stringify(state.lessonDifficulty));
 }
 
 /* ==========================================================================
@@ -611,6 +611,8 @@ function renderLessonView(lessonKey) {
   const examplePlaceholder = "Ask a question about this example..."
   const answerPlaceholder = "type your answer or follow-up question..."
 
+  const counter = { ix: 0 };
+
   app.innerHTML = `
     <article>
       <h1 class="lesson-title">${lesson.Lesson}</h1>
@@ -619,7 +621,7 @@ function renderLessonView(lessonKey) {
         ${renderSubmissionDiv(getKey(LESSON_SEC, 0), lessonPlaceholder)}
       </section>
 
-      <div class="slider-card" style="--scale: 1.4;"> Lesson Difficulty: ${formatDifficultySlider(lessonKey)}</div>
+      ${formatLessonDifficultySlider(lessonKey, counter)}
 
       <h2 class="section-title">例文 (Examples)</h2>
       ${(lesson['10 Example Sentences'] || []).map((item, idx) => {
@@ -637,6 +639,8 @@ function renderLessonView(lessonKey) {
           </details>
         </div>
       `}).join('')}
+
+      ${formatLessonDifficultySlider(lessonKey, counter)}
 
       <h2 class="section-title">翻訳練習 (Translation Practice) ${progressBySectionWithID(keysBySection, lessonKey, TRANSLATION_SEC)}</h2>
       ${(lesson['15 Practice Sentences'] || []).map((item, idx) => {
@@ -658,6 +662,8 @@ function renderLessonView(lessonKey) {
         </div>
       `}).join('')
     }
+
+      ${formatLessonDifficultySlider(lessonKey, counter)}
 
       <h2 class="section-title">返答練習 (Response Practice) ${progressBySectionWithID(keysBySection, lessonKey, RESPONSE_SEC)}</h2>
       ${(lesson['15 Japanese Response Sentences'] || []).map((item, idx) => {
@@ -685,6 +691,8 @@ function renderLessonView(lessonKey) {
         </div>
       `}).join('')}
 
+      ${formatLessonDifficultySlider(lessonKey, counter)}
+
       <nav class="lesson-nav">
         ${prevKey ? `<a href="#/lesson/${prevKey}" class="btn">← Previous Lesson</a>` : '<span></span>'}
         <a href="#/" class="btn">Index</a>
@@ -703,7 +711,7 @@ function renderIndexView() {
 
   const links = Object.entries(data).map(([key, val]) => {
     const title = val[mode]?.Lesson || key;
-    return `<li>${completedSentences(key)} <a href="#/lesson/${key}">${title}</a> ${formatDifficultySlider(key)}</li>`;
+    return `<li>${completedSentences(key)} ${formatDifficultySlider(key)} <a href="#/lesson/${key}">${title}</a></li>`;
   }).join('');
 
   app.innerHTML = `
@@ -723,14 +731,20 @@ function toggleSectionProgress(lessonKey, section) {
   updateLessonProgress(lessonKey);
 }
 
-function formatDifficultySlider(lessonKey) {
+function formatLessonDifficultySlider(lessonKey, counter) {
+  idPrefix = `${lessonKey}-${counter.ix}`;
+  counter.ix++;
+  return `<div class="slider-card" style="--scale: 1.4;"> Lesson Difficulty: ${formatDifficultySlider(idPrefix)}</div>`
+}
+
+function formatDifficultySlider(idPrefix) {
   return `<div class="slider-card">
             <div class="slider-wrapper">
-              <input type="range" id="${lessonKey}-slider" min="0" max="9" value="0" step="1">
-              <span class="slider-value" id="${lessonKey}-slider-value">0</span>
+              <input type="range" id="${idPrefix}-slider" min="0" max="9" value="0" step="1">
+              <span class="slider-value" id="${idPrefix}-slider-value">0</span>
             </div>
 
-            <div class="difficulty-label" id="${lessonKey}-difficulty-label"></div>
+            <div class="difficulty-label" id="${idPrefix}-difficulty-label"></div>
           </div>`
 }
 
@@ -789,12 +803,13 @@ function router() {
   if (hash.startsWith('#/lesson/')) {
     state.lessonKey = hash.replace('#/lesson/', '')
     renderLessonView(state.lessonKey);
+    bindLessonDifficultySlider(state.lessonKey)
   } else {
     renderIndexView();
+    bindDifficultySlider();
   }
   window.scrollTo(0, 0);
   applyAnsweredCheckmarks();
-  bindDifficultySlider();
 }
 
 /* ==========================================================================
@@ -953,19 +968,47 @@ function bindConfigUI() {
   fetchBtn.addEventListener('click', fetchModels);
 }
 
+function numDifficultySliders() {
+  const sliderInstances = document.querySelectorAll(".difficulty-label");
+  return sliderInstances.length
+}
+
 // update the slider based on it's slider value (or update it's value directly)
-function updateSlider(lessonKey, updateFromStorage = false) {
-  const slider = document.getElementById(lessonKey + '-slider');
-  const display = document.getElementById(lessonKey + '-slider-value');
-  const label = document.getElementById(lessonKey + '-difficulty-label');
+function updateSlider(lessonKey, updateFromStorage = false, ix = null) {
+  let idPrefix = (ix !== null) ? `${lessonKey}-${ix}` : lessonKey;
+
+  const slider = document.getElementById(idPrefix + '-slider');
 
   // set the slider value if one was provided
   if (updateFromStorage) {
     slider.value = state.lessonDifficulty[lessonKey] || 0;
   }
   const val = parseInt(slider.value);
+
+  if (ix !== null) {
+    // loop through all of the sliders for the certain
+    for (let i = 0; i < numDifficultySliders(); i++) {
+      idPrefix = `${lessonKey}-${i}`;
+      _updateSlider(idPrefix, val);
+    }
+  } else {
+    _updateSlider(idPrefix, val);
+  }
+
+  // Save off slider value (if we aren't updating from storage)
+  if (!updateFromStorage) {
+    state.lessonDifficulty[lessonKey] = val;
+    saveLessonDifficulty();
+  }
+}
+
+function _updateSlider(idPrefix, val) {
+  const slider = document.getElementById(idPrefix + '-slider');
+  const display = document.getElementById(idPrefix + '-slider-value');
+  const label = document.getElementById(idPrefix + '-difficulty-label');
   let difficulty;
 
+    
   // Determine state based on value
   if (val === 0) {
     difficulty = CONFIG[0];
@@ -985,16 +1028,12 @@ function updateSlider(lessonKey, updateFromStorage = false) {
   slider.style.background = `linear-gradient(to right, ${difficulty.color} ${percentage}%, #e2e8f0 ${percentage}%)`;
 
   // Update text values
+  slider.value = val;
   display.textContent = val;
   label.textContent = difficulty.text;
-
-  // Save off slider value (if we aren't updating from storage)
-  if (!updateFromStorage) {
-    state.lessonDifficulty[lessonKey] = val;
-    saveLessonDifficulty();
-  }
 }
 
+// bind event listeners to the main page difficulty sliders
 function bindDifficultySlider() {
   const lessonKeys = Object.keys(window.LESSONS_DATA);
   lessonKeys.forEach(lessonKey => {
@@ -1006,6 +1045,19 @@ function bindDifficultySlider() {
       updateSlider(lessonKey, true)
     }
   })
+}
+
+// bind event listeners to the difficulty sliders for a single lesson page
+function bindLessonDifficultySlider(lessonKey) {
+  for (let ix = 0; ix < numDifficultySliders(); ix++) {
+    const slider = document.getElementById(`${lessonKey}-${ix}-slider`);
+    slider.addEventListener('input', () => updateSlider(lessonKey, false, ix));
+  }
+
+  // update the initial state of our sliders to our saved value for it
+  if (numDifficultySliders()) {
+    updateSlider(lessonKey, true, 0)
+  }
 }
 
 /* ==========================================================================
