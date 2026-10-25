@@ -709,15 +709,37 @@ function renderIndexView() {
   const mode = state.config.furiganaEnabled ? 'furigana' : 'normal';
   const app = document.getElementById('app');
 
-  const links = Object.entries(data).map(([key, val]) => {
+  const rows = Object.entries(data).map(([key, val]) => {
     const title = val[mode]?.Lesson || key;
-    return `<li>${completedSentences(key)} ${formatDifficultySlider(key)} <a href="#/lesson/${key}">${title}</a></li>`;
+    return `
+      <tr>
+        <td>${completedSentences(key)}</td>
+        <td>${formatDifficultySlider(key)} &nbsp;</td>
+        <td><a href="#/lesson/${key}">${title}</a></td>
+      </tr>
+    `;
   }).join('');
 
   app.innerHTML = `
     <div class="lesson-index">
       <h1>Japanese Grammar Lessons</h1>
-      <ul>${links || '<p>No lessons available.</p>'}</ul>
+      ${rows
+      ? `
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: left;">Completion</th>
+                  <th style="text-align: left;">Difficulty</th>
+                  <th style="text-align: left;">Lesson Name</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          `
+      : '<p>No lessons available.</p>'
+    }
     </div>
   `;
 }
@@ -1008,7 +1030,7 @@ function _updateSlider(idPrefix, val) {
   const label = document.getElementById(idPrefix + '-difficulty-label');
   let difficulty;
 
-    
+
   // Determine state based on value
   if (val === 0) {
     difficulty = CONFIG[0];
