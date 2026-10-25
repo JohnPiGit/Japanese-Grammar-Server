@@ -35,6 +35,7 @@ const state = {
     customEndpoint: '',
     selectedModel: '',
     furiganaEnabled: false,
+    topBarPinned: false,
   },
   answeredItems: new Set(),
   lessonDifficulty: new Map(),
@@ -577,7 +578,7 @@ function popAndPopulateUserMessage(itemKey) {
 
 function focusInputBox(itemKey) {
   document.getElementById(INPUT_PREFIX + itemKey)?.focus();
-}  
+}
 
 function cancelStream(itemKey) {
   const controller = state.activeControllers.get(itemKey);
@@ -955,8 +956,29 @@ function handleGlobalKeydown(e) {
   }
 }
 
+function handleTopBarScrolling(bar) {
+  // handle hiding away the bar when scrolling
+    let y = 0, last = 0;
+    window.addEventListener('scroll', () => {
+      if (state.config.topBarPinned) {
+        if (y !== 0) {
+          y = 0;
+          bar.style.transform = 'translateY(0)';
+        }
+        last = window.scrollY;
+        return;
+      }
+  
+      const delta = window.scrollY - last;
+      y = Math.min(0, Math.max(-bar.offsetHeight, (window.scrollY <= 0 ? 0 : y - delta)));
+      bar.style.transform = `translateY(${y}px)`;
+      last = window.scrollY;
+    }, { passive: true });
+}
+
 function bindConfigUI() {
   const fetchBtn = document.getElementById('cfg-fetch-models-btn');
+  const pinTopBarEl = document.getElementById('cfg-pin-topbar');
   const providerEl = document.getElementById('cfg-provider');
   const endpointEl = document.getElementById('cfg-endpoint');
   const usernameEl = document.getElementById('cfg-username');
@@ -970,6 +992,7 @@ function bindConfigUI() {
   endpointEl.value = state.config.customEndpoint;
   if (usernameEl) usernameEl.value = state.config.provider;
   furiganaEl.checked = state.config.furiganaEnabled;
+  pinTopBarEl.checked = Boolean(state.config.topBarPinned);
   document.body.classList.toggle('hide-furigana', !state.config.furiganaEnabled);
 
   const toggleEndpoint = () => endpointEl.classList.toggle('hidden', providerEl.value !== 'Custom');
@@ -1014,14 +1037,17 @@ function bindConfigUI() {
     saveConfig();
   });
 
-  // handle hiding away the bar when scrolling
-  let y = 0, last = 0;
-  window.addEventListener('scroll', () => {
-    const delta = window.scrollY - last;
-    y = Math.min(0, Math.max(-bar.offsetHeight, (window.scrollY <= 0 ? 0 : y - delta)));
-    bar.style.transform = `translateY(${y}px)`;
-    last = window.scrollY;
-  }, { passive: true });
+  // top-bar pin handler
+  pinTopBarEl?.addEventListener('change', () => {
+    state.config.topBarPinned = pinTopBarEl.checked;
+    if (state.config.topBarPinned) {
+      y = 0;
+      bar.style.transform = 'translateY(0)';
+    }
+    saveConfig();
+  });
+
+  handleTopBarScrolling(bar);
 
   fetchBtn.addEventListener('click', fetchModels);
 }
