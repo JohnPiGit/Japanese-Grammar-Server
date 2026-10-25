@@ -975,7 +975,7 @@ function bindConfigUI() {
     state.config.furiganaEnabled = furiganaEl.checked;
     document.body.classList.toggle('hide-furigana', !furiganaEl.checked);
     saveConfig();
-    router();
+    rerenderPreservingState();
   });
 
   // handle hiding away the bar when scrolling
@@ -1130,6 +1130,70 @@ function allKeysBySection(lessonKey) {
   }
 
   return keys;
+}
+
+/* ==========================================================================
+   Handle re-rendering furigana
+   ========================================================================== */
+
+function rerenderPreservingState() {
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const hash = window.location.hash || '#/';
+
+  if (hash.startsWith('#/lesson/')) {
+    // 1. Snapshot open dropdowns, unsubmitted inputs, and shown user answers
+    const openDetailsIds = Array.from(document.querySelectorAll('details[open]'))
+      .map(el => el.id)
+      .filter(Boolean);
+
+    const savedInputs = new Map();
+    document.querySelectorAll(`input[id^="${INPUT_PREFIX}"]`).forEach(input => {
+      if (input.value) savedInputs.set(input.id, input.value);
+    });
+
+    const savedUserAnswers = new Map();
+    document.querySelectorAll('.user-answer').forEach(el => {
+      if (el.innerText) savedUserAnswers.set(el.id, el.innerText);
+    });
+
+    // 2. Re-render lesson view and rebind sliders
+    // state.lessonKey = hash.replace('#/lesson/', '');
+    renderLessonView(state.lessonKey);
+    bindLessonDifficultySlider(state.lessonKey);
+
+    // 3. Restore dropdowns, inputs, and shown answers
+    openDetailsIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.open = true;
+    });
+
+    savedInputs.forEach((val, id) => {
+      const input = document.getElementById(id);
+      if (input) input.value = val;
+    });
+
+    savedUserAnswers.forEach((text, id) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = text;
+    });
+
+    // 4. Re-render chat histories and restore active streaming button states
+    for (const itemKey of state.chatHistories.keys()) {
+      renderHistory(itemKey);
+    }
+    for (const itemKey of state.activeControllers.keys()) {
+      toggleSubmissionState(itemKey, true);
+    }
+
+  } else {
+    renderIndexView();
+    bindDifficultySlider();
+  }
+  applyAnsweredCheckmarks();
+
+  // 5. Restore scroll position
+  window.scrollTo(scrollX, scrollY);
 }
 
 /* ==========================================================================
