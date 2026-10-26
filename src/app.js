@@ -423,6 +423,7 @@ function formatPracticeRespondPrompt(item) {
 // toast is the pop-up message that fades away after a short time. Just like your toast melts back into the toaster if you're not quick enough
 function showToast(message) {
   const toast = document.getElementById('toast');
+  if (!toast) return;
   toast.textContent = message;
   toast.classList.remove('hidden');
   clearTimeout(showToast.timer);
@@ -430,13 +431,11 @@ function showToast(message) {
 }
 
 function showUserAnswer(itemKey, userText) {
-  const userAnswerEl = document.getElementById(`user-answer-${itemKey}`);
-  userAnswerEl.innerText = userText;
+  (el => el && (el.innerText = userText))(document.getElementById(`user-answer-${itemKey}`));
 }
 
 function clearUserAnswer(itemKey) {
-  const userAnswerEl = document.getElementById(`user-answer-${itemKey}`);
-  userAnswerEl.innerText = "";
+  (el => el && (el.innerText = ""))(document.getElementById(`user-answer-${itemKey}`));
 }
 
 async function handleSubmission(itemKey) {
