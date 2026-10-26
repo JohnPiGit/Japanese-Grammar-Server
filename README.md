@@ -14,7 +14,7 @@ This is a prettied up version of a local webserver that I made and have been usi
 
 I __HIGHLY__ recommend using [Yomitan](https://yomitan.wiki/) - a pop-up dictionary browser extension - with this (or even just using Yomitan at all!) as it make looking up words soo easy.
 
-All the lessons were generated using `Claude Sonnet 5.5` "grounded with internet searches" from a list of hand-picked by me "grammar" topics (or really just things I wanted to study/practice) into a bunch of jsons that I format into "Lessons"
+All the lessons were generated using `Claude Sonnet 5.5` "grounded with internet searches" from a list of 84 "hand-picked" by me "grammar" topics (or really just things I wanted to study/practice), and 74 more lessons that `Gemini 3.8 flash` "decided" were missing, into a bunch of jsons that I format into "Lessons"
 
 ## Who is this for?
 Someone at a somewhat low-mid level of Japanese. I think it minimally requires you to be comfortable reading hiragana and having a fair basis of words learned. Though I imagine just going through some of the easier grammar topics and doing the first few translation practice sentences is plenty doable for more beginner-level learners
