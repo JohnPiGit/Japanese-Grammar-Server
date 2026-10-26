@@ -18,7 +18,7 @@ const SECTION_MAP = {
   resp: { type: '返答練習 Sentences', field: '15 Japanese Response Sentences' },
 };
 
-const CONFIG = {
+const DIFFICULTY_CONFIG = {
   0: { color: '#94a3b8', text: '' },
   easy: { color: '#22c55e', text: 'Easy' },
   medium: { color: '#eab308', text: 'Medium' },
@@ -36,6 +36,8 @@ const state = {
     selectedModel: '',
     furiganaEnabled: false,
     topBarPinned: false,
+    currentSort: 'Default',
+    sortAscending: true,
   },
   answeredItems: new Set(),
   lessonDifficulty: new Map(),
@@ -597,6 +599,60 @@ function clearChat(itemKey) {
 }
 
 /* ==========================================================================
+   Index Sorting Helpers & Map
+   ========================================================================== */
+
+function countSectionCompletion(lessonKey, section) {
+  const keys = allKeysBySection(lessonKey)[section] || [];
+  return countIntersection(state.answeredItems, keys);
+}
+
+function sortByTranslationCompletion(data) {
+  return Object.fromEntries(
+    Object.entries(data).sort(([a], [b]) =>
+      countSectionCompletion(a, TRANSLATION_SEC) - countSectionCompletion(b, TRANSLATION_SEC)
+    )
+  );
+}
+
+function sortByResponseCompletion(data) {
+  return Object.fromEntries(
+    Object.entries(data).sort(([a], [b]) =>
+      countSectionCompletion(a, RESPONSE_SEC) - countSectionCompletion(b, RESPONSE_SEC)
+    )
+  );
+}
+
+function sortByTotalCompletion(data) {
+  return Object.fromEntries(
+    Object.entries(data).sort(([a], [b]) => {
+      const totalA = countSectionCompletion(a, TRANSLATION_SEC) + countSectionCompletion(a, RESPONSE_SEC);
+      const totalB = countSectionCompletion(b, TRANSLATION_SEC) + countSectionCompletion(b, RESPONSE_SEC);
+      return totalA - totalB;
+    })
+  );
+}
+
+function sortByDifficulty(data) {
+  return Object.fromEntries(
+    Object.entries(data).sort(([a], [b]) => {
+      const diffA = Number(state.lessonDifficulty[a]) || 0;
+      const diffB = Number(state.lessonDifficulty[b]) || 0;
+      return diffA - diffB;
+    })
+  );
+}
+
+// Map from sort name to sort function:
+const SORT_METHODS = {
+  'Default': (data) => data,
+  'Translation Completion': sortByTranslationCompletion,
+  'Response Completion': sortByResponseCompletion,
+  'Total Completion': sortByTotalCompletion,
+  'Difficulty': sortByDifficulty,
+};
+
+/* ==========================================================================
    Component & View Rendering
    ========================================================================== */
 function renderSubmissionDiv(itemKey, placeholder) {
@@ -737,15 +793,27 @@ function renderLessonView(lessonKey) {
       </nav>
     </article>
   `;
+
+  bindLessonDifficultySlider(lessonKey);
 }
 
 function renderIndexView() {
   document.getElementById('top-bar-title').innerHTML = '';
 
-  const data = window.LESSONS_DATA || {};
+  const rawData = window.LESSONS_DATA || {};
+
+  // 1. Sort using the selected sort function
+  const sortFn = SORT_METHODS[state.config.currentSort] || SORT_METHODS['Default'];
+  let sortedData = sortFn(rawData);
+
+  // 2. Reverse if descending
+  if (!state.config.sortAscending) {
+    sortedData = Object.fromEntries(Object.entries(sortedData).reverse());
+  }
+
   const app = document.getElementById('app');
 
-  const rows = Object.entries(data).map(([key, val]) => {
+  const rows = Object.entries(sortedData).map(([key, val]) => {
     const title = val.furigana?.Lesson || val.normal?.Lesson || key;
     return `
       <tr>
@@ -758,7 +826,10 @@ function renderIndexView() {
 
   app.innerHTML = `
     <div class="lesson-index">
-      <h1>Japanese Grammar Lessons</h1>
+      <div class="lesson-index-header">
+        <h1>Japanese Grammar Lessons</h1>
+        ${renderSortControls()}
+      </div>
       ${rows
       ? `
             <table>
@@ -778,6 +849,7 @@ function renderIndexView() {
     }
     </div>
   `;
+  bindDifficultySlider();
 }
 
 function toggleSectionProgress(lessonKey, section) {
@@ -861,10 +933,8 @@ function router() {
   if (hash.startsWith('#/lesson/')) {
     state.lessonKey = hash.replace('#/lesson/', '')
     renderLessonView(state.lessonKey);
-    bindLessonDifficultySlider(state.lessonKey)
   } else {
     renderIndexView();
-    bindDifficultySlider();
   }
   window.scrollTo(0, 0);
   applyAnsweredCheckmarks();
@@ -873,6 +943,40 @@ function router() {
 /* ==========================================================================
    Config UI & Model Fetching
    ========================================================================== */
+
+function renderSortDropdown() {
+  const options = Object.keys(SORT_METHODS).map(name => {
+    const isSelected = state.config.currentSort === name ? 'selected' : '';
+    return `<option value="${name}" ${isSelected}>${name}</option>`;
+  }).join('');
+
+  return `<select id="sort-select" class="sort-select" title="Sort Lessons by:" onchange="handleSortChange(this.value)">${options}</select>`;
+}
+
+function renderSortControls() {
+  const arrow = state.config.sortAscending ? '▲' : '▼';
+  const label = state.config.sortAscending ? 'Sorting in ascending order (click for Descending)' : 'Sorting in descending order (click for Ascending)';
+  return `
+    <div class="sort-container">
+      ${renderSortDropdown()}
+      <button type="button" class="btn sort-toggle-btn" title="${label}" onclick="toggleSortDirection()">
+        ${arrow}
+      </button>
+    </div>
+  `;
+}
+
+function handleSortChange(sortMethod) {
+  state.config.currentSort = sortMethod;
+  saveConfig();
+  renderIndexView();
+}
+
+function toggleSortDirection() {
+  state.config.sortAscending = !state.config.sortAscending;
+  saveConfig();
+  renderIndexView();
+}
 
 function bindHowToUseModal() {
   const modal = document.getElementById('how-to-use-modal');
@@ -1094,13 +1198,13 @@ function _updateSlider(idPrefix, val) {
 
   // Determine state based on value
   if (val === 0) {
-    difficulty = CONFIG[0];
+    difficulty = DIFFICULTY_CONFIG[0];
   } else if (val >= 1 && val <= 3) {
-    difficulty = CONFIG.easy;
+    difficulty = DIFFICULTY_CONFIG.easy;
   } else if (val >= 4 && val <= 6) {
-    difficulty = CONFIG.medium;
+    difficulty = DIFFICULTY_CONFIG.medium;
   } else {
-    difficulty = CONFIG.hard;
+    difficulty = DIFFICULTY_CONFIG.hard;
   }
 
   // Calculate track fill percentage
