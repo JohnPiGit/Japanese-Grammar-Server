@@ -955,13 +955,17 @@ function renderSortDropdown() {
 
 function renderSortControls() {
   const arrow = state.config.sortAscending ? '▲' : '▼';
-  const label = state.config.sortAscending ? 'Sorting in ascending order (click for Descending)' : 'Sorting in descending order (click for Ascending)';
+  const label = state.config.sortAscending ? 'Ascending (click for Descending)' : 'Descending (click for Ascending)';
+  
   return `
-    <div class="sort-container">
-      ${renderSortDropdown()}
-      <button type="button" class="btn sort-toggle-btn" title="${label}" onclick="toggleSortDirection()">
-        ${arrow}
-      </button>
+    <div class="sort-card">
+      <span class="sort-card-label">Sort Lessons By:</span>
+      <div class="sort-container">
+        ${renderSortDropdown()}
+        <button type="button" class="btn sort-toggle-btn" title="${label}" onclick="toggleSortDirection()">
+          ${arrow}
+        </button>
+      </div>
     </div>
   `;
 }

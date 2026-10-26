@@ -537,14 +537,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ==========================================================================
-   Lesson Index Header & Sort Controls
+   Sort Card & Controls
    ========================================================================== */
 .lesson-index-header {
   display: flex;
   align-items: center;
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: 1.25rem;
   margin-bottom: 1.25rem;
 }
 
@@ -552,10 +552,26 @@ input[type="range"]::-moz-range-thumb {
   margin: 0;
 }
 
+.sort-card {
+  display: inline-flex;
+  flex-direction: column;     /* Stacks the label on top */
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.sort-card-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;             /* Subtle muted text */
+  line-height: 1;
+}
+
 .sort-container {
   display: inline-flex;
-  align-items: left;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .sort-select {
