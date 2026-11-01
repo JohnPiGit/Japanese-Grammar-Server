@@ -611,3 +611,34 @@ input[type="range"]::-moz-range-thumb {
   background: #e2e8f0;
   border-color: #94a3b8;
 }
+
+/* Container to keep the star button aligned nicely beside the difficulty slider */
+.difficulty-star-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Star Button */
+.star-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.15rem;
+  color: #94a3b8; /* Default subtle outline color */
+  transition: transform 0.15s ease, color 0.15s ease;
+  user-select: none;
+}
+
+.star-btn:hover {
+  transform: scale(1.2);
+  color: #eab308;
+}
+
+/* Filled star state */
+.star-btn.starred {
+  color: #eab308; /* Yellow/Gold */
+  text-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
+}
