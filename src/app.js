@@ -4,6 +4,7 @@
 const CONFIG_KEY = 'jp_grammar_study_config';
 const ANSWERED_KEY = 'jp_grammar_answered_items';
 const DIFFICULTY_KEY = 'jp_grammar_difficulty_levels';
+const STARRED_KEY = 'jp_grammar_starred_lessons';
 
 // These must be the same as the `SECTION_MAP` keys!
 const LESSON_SEC = 'ls'; // lesson/explanation
@@ -41,6 +42,7 @@ const state = {
   },
   answeredItems: new Set(),
   lessonDifficulty: new Map(),
+  starredLessons: new Set(),
   // In-memory only!
   apiKey: '',
   lessonKey: '',
@@ -93,6 +95,21 @@ function saveLessonDifficulty() {
   localStorage.setItem(DIFFICULTY_KEY, JSON.stringify(state.lessonDifficulty));
 }
 
+function loadStarredLessons() {
+  const saved = localStorage.getItem(STARRED_KEY);
+  if (saved) {
+    try {
+      state.starredLessons = new Set(JSON.parse(saved));
+    } catch (e) {
+      console.error('Failed to parse starred lessons:', e);
+    }
+  }
+}
+
+function saveStarredLessons() {
+  localStorage.setItem(STARRED_KEY, JSON.stringify(Array.from(state.starredLessons)));
+}
+
 /* ==========================================================================
    Answer history functions
    ========================================================================== */
@@ -121,6 +138,42 @@ function unMarkItemAnswered(itemKey) {
 
 function makeCheckSpanButton(itemKey) {
   return `<button id="check-${itemKey}" class="check-mark-btn hidden" title="Mark as uncompleted" onclick="unMarkItemAnswered('${itemKey}')">✓</button>`;
+}
+
+function renderStarButton(lessonKey) {
+  const isStarred = state.starredLessons.has(lessonKey);
+  return `
+    <button type="button"
+            id="star-${lessonKey}"
+            class="star-btn ${isStarred ? 'starred' : ''}"
+            title="${isStarred ? 'Unstar lesson' : 'Star lesson'}"
+            onclick="toggleLessonStar('${lessonKey}')">
+      ${isStarred ? '★' : '☆'}
+    </button>`;
+}
+
+function toggleLessonStar(lessonKey) {
+  if (state.starredLessons.has(lessonKey)) {
+    state.starredLessons.delete(lessonKey);
+  } else {
+    state.starredLessons.add(lessonKey);
+  }
+  saveStarredLessons();
+
+  // If currently sorting by Starred, re-render to reflect new order
+  if (state.config.currentSort === 'Starred') {
+    renderIndexView();
+    return;
+  }
+
+  // Otherwise, update the button in-place
+  const btn = document.getElementById(`star-${lessonKey}`);
+  if (btn) {
+    const isStarred = state.starredLessons.has(lessonKey);
+    btn.classList.toggle('starred', isStarred);
+    btn.innerHTML = isStarred ? '★' : '☆';
+    btn.title = isStarred ? 'Unstar lesson' : 'Star lesson';
+  }
 }
 
 function applyAnsweredCheckmarks() {
@@ -642,9 +695,21 @@ function sortByDifficulty(data) {
   );
 }
 
+function sortByStarred(data) {
+  return Object.fromEntries(
+    Object.entries(data).sort(([a], [b]) => {
+      const starA = state.starredLessons.has(a) ? 1 : 0;
+      const starB = state.starredLessons.has(b) ? 1 : 0;
+      // Starred items appear first when ascending
+      return starB - starA;
+    })
+  );
+}
+
 // Map from sort name to sort function:
 const SORT_METHODS = {
   'Default': (data) => data,
+  'Starred': sortByStarred,
   'Translation Completion': sortByTranslationCompletion,
   'Response Completion': sortByResponseCompletion,
   'Total Completion': sortByTotalCompletion,
@@ -815,12 +880,17 @@ function renderIndexView() {
   const rows = Object.entries(sortedData).map(([key, val]) => {
     const title = val.furigana?.Lesson || val.normal?.Lesson || key;
     return `
-      <tr>
-        <td>${completedSentences(key)}</td>
-        <td>${formatDifficultySlider(key)} &nbsp;</td>
-        <td><a href="#/lesson/${key}">${title}</a></td>
-      </tr>
-    `;
+        <tr>
+          <td>${completedSentences(key)}</td>
+          <td>
+            <div class="difficulty-star-container">
+              ${formatDifficultySlider(key)}
+              ${renderStarButton(key)}
+            </div>
+          </td>
+          <td><a href="#/lesson/${key}">${title}</a></td>
+        </tr>
+      `;
   }).join('');
 
   app.innerHTML = `
@@ -955,7 +1025,7 @@ function renderSortDropdown() {
 function renderSortControls() {
   const arrow = state.config.sortAscending ? '▲' : '▼';
   const label = state.config.sortAscending ? 'Ascending (click for Descending)' : 'Descending (click for Ascending)';
-  
+
   return `
     <div class="sort-card">
       <span class="sort-card-label">Sort Lessons By:</span>
@@ -1357,6 +1427,7 @@ async function init() {
   loadStoredConfig();
   loadAnsweredItems();
   loadLessonDifficulty();
+  loadStarredLessons();
   bindConfigUI();
   bindHowToUseModal();
 
